@@ -141,3 +141,50 @@ describe('POST /annotation-prompts', () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe('PUT /annotation-prompts/:id', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    app = await buildTestApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('updates an existing prompt with partial data', async () => {
+    const created = await app.db.annotationPrompts.create({
+      title: 'Original',
+      provider_id: 'openai',
+      language: 'en',
+      prompt: 'Old prompt text.',
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/annotation-prompts/${created.id}`,
+      payload: {
+        title: 'Updated Title',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.title).toBe('Updated Title');
+    expect(body.prompt).toBe('Old prompt text.'); // unchanged field preserved
+    expect(body.id).toBe(created.id);
+  });
+
+  it('returns 404 when updating non-existent prompt', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/annotation-prompts/9999',
+      payload: {
+        title: 'Does not matter',
+      },
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+});

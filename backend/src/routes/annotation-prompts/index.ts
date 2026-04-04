@@ -1,6 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
-import { AnnotationPrompt, CreateAnnotationPrompt } from '../../schemas/prompt.js';
+import { AnnotationPrompt, CreateAnnotationPrompt, UpdateAnnotationPrompt } from '../../schemas/prompt.js';
 import { IdParam, ErrorResponse } from '../../schemas/common.js';
 
 const annotationPromptRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -38,6 +38,24 @@ const annotationPromptRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   }, async (request, reply) => {
     const prompt = await fastify.db.annotationPrompts.create(request.body);
     return reply.status(201).send(prompt);
+  });
+
+  fastify.put('/:id', {
+    schema: {
+      params: IdParam,
+      body: UpdateAnnotationPrompt,
+      response: {
+        200: AnnotationPrompt,
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const existing = await fastify.db.annotationPrompts.getById(request.params.id);
+    if (!existing) {
+      return reply.notFound('Annotation prompt not found');
+    }
+    const updated = await fastify.db.annotationPrompts.update(request.params.id, request.body);
+    return updated;
   });
 };
 
