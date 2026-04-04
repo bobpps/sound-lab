@@ -108,4 +108,59 @@ describe('Provider routes', () => {
       expect(res.statusCode).toBe(400);
     });
   });
+
+  describe('PUT /providers/:id', () => {
+    it('updates a provider', async () => {
+      await seedProvider('google', 'Google');
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/providers/google',
+        payload: { name: 'Google Cloud' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ id: 'google', name: 'Google Cloud' });
+    });
+
+    it('updates enabled field', async () => {
+      await seedProvider('google', 'Google');
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/providers/google',
+        payload: { enabled: false },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().enabled).toBe(false);
+    });
+
+    it('returns 404 for non-existent provider', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/providers/nonexistent',
+        payload: { name: 'Test' },
+      });
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  describe('DELETE /providers/:id', () => {
+    it('deletes a provider and returns 204', async () => {
+      await seedProvider('google', 'Google');
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/providers/google',
+      });
+      expect(res.statusCode).toBe(204);
+
+      const check = await app.inject({ method: 'GET', url: '/providers/google' });
+      expect(check.statusCode).toBe(404);
+    });
+
+    it('returns 204 for non-existent provider (idempotent)', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/providers/nonexistent',
+      });
+      expect(res.statusCode).toBe(204);
+    });
+  });
 });
