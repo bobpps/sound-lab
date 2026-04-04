@@ -1,6 +1,9 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import { Provider, ProviderTypeQuery, CreateProvider, UpdateProvider } from '../../schemas/provider.js';
+import {
+  Provider, ProviderTypeQuery, CreateProvider, UpdateProvider,
+  SetKeyBody, GetKeyResponse,
+} from '../../schemas/provider.js';
 import { StringIdParam, ErrorResponse } from '../../schemas/common.js';
 
 const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -12,23 +15,6 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
   }, async (request) => {
     return fastify.db.providers.list(request.query.type);
-  });
-
-  // GET /providers/:id
-  fastify.get('/:id', {
-    schema: {
-      params: StringIdParam,
-      response: {
-        200: Provider,
-        404: ErrorResponse,
-      },
-    },
-  }, async (request, reply) => {
-    const provider = await fastify.db.providers.getById(request.params.id);
-    if (!provider) {
-      return reply.notFound(`Provider ${request.params.id} not found`);
-    }
-    return provider;
   });
 
   // POST /providers
@@ -50,6 +36,63 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       }
       throw err;
     }
+  });
+
+  // PUT /providers/:id/key — registered before /:id to avoid routing conflicts
+  fastify.put('/:id/key', {
+    schema: {
+      params: StringIdParam,
+      body: SetKeyBody,
+      response: {
+        204: Type.Null(),
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const provider = await fastify.db.providers.getById(request.params.id);
+    if (!provider) {
+      return reply.notFound(`Provider ${request.params.id} not found`);
+    }
+    await fastify.db.providers.setKey(request.params.id, request.body.key);
+    return reply.status(204).send();
+  });
+
+  // GET /providers/:id/key — registered before /:id to avoid routing conflicts
+  fastify.get('/:id/key', {
+    schema: {
+      params: StringIdParam,
+      response: {
+        200: GetKeyResponse,
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const provider = await fastify.db.providers.getById(request.params.id);
+    if (!provider) {
+      return reply.notFound(`Provider ${request.params.id} not found`);
+    }
+    const key = await fastify.db.providers.getDecryptedKey(request.params.id);
+    if (!key) {
+      return reply.notFound(`No API key set for provider ${request.params.id}`);
+    }
+    return { key };
+  });
+
+  // GET /providers/:id
+  fastify.get('/:id', {
+    schema: {
+      params: StringIdParam,
+      response: {
+        200: Provider,
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const provider = await fastify.db.providers.getById(request.params.id);
+    if (!provider) {
+      return reply.notFound(`Provider ${request.params.id} not found`);
+    }
+    return provider;
   });
 
   // PUT /providers/:id
