@@ -23,13 +23,15 @@ export async function createDatabase(config?: DbConfig): Promise<IDatabase> {
     };
   }
 
-  const { createLocalDb } = await import('./local/client.js');
+  const { createLocalDb, createMemoryDb } = await import('./local/client.js');
   const { LocalDialogRepository } = await import('./local/dialogs.js');
   const { LocalAnnotationRepository } = await import('./local/annotations.js');
   const { LocalAnnotationPromptRepository, LocalAgentPromptRepository } = await import('./local/prompts.js');
   const { LocalProviderRepository } = await import('./local/providers.js');
 
-  const sqliteDb = createLocalDb(cfg.local!.path);
+  const sqliteDb = cfg.local!.path === ':memory:'
+    ? createMemoryDb()
+    : createLocalDb(cfg.local!.path);
 
   return {
     dialogs: new LocalDialogRepository(sqliteDb),
