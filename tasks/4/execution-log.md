@@ -83,9 +83,49 @@ All 10 tasks from the plan were implemented in strict TDD order (Red -> Green ->
 
 3. **DELETE is idempotent.** Returns 204 for both existing and non-existing providers, matching the DB layer's behavior.
 
-### Verification Results
+### Verification Results (pre-review)
 
 - **Full test suite:** 64/64 tests pass (7 test files)
 - **Provider route tests:** 21/21 pass
 - **TypeScript:** Compiles cleanly with `--noEmit`
 - **Existing tests unaffected:** All health, DB, crypto tests continue to pass
+
+---
+
+## Review Phase (Adaptive Return Loop)
+
+### Issues Found
+
+Three parallel review agents (code review, alignment check, code-critic) identified these issues:
+
+**Major:**
+1. **BUG-1 (POST):** Duplicate detection caught SQLite-specific `'UNIQUE constraint failed'` string — Supabase throws PostgreSQL `23505` with different text → 500 instead of 409
+2. **BUG-2 (PUT):** Not-found detection caught `'not found'` from local repo — Supabase throws `PGRST116` → 500 instead of 404
+3. **ARCH-1:** Error translation (DB→HTTP) done in route layer instead of repository layer, violating dual-DB abstraction
+
+**Minor:**
+4. **DELETE behavior:** Issue spec says "not found → 404" but implementation returned 204 (idempotent). Alignment check flagged this.
+5. DELETE schema declared unreachable `404: ErrorResponse`
+6. `SetKeyBody` accepts empty string keys
+7. No format constraints on `CreateProvider.id`
+
+### Resolution: Check-First Pattern
+
+Replaced try/catch with DB-specific error strings with `getById` checks before mutations (same pattern already used by `setKey`/`getKey` handlers). This:
+- Eliminates dependency on DB-specific error messages
+- Works identically on SQLite and Supabase
+- Is a localized fix, no architectural changes needed
+
+Also fixed DELETE to check existence first → 404 for non-existent, matching issue spec.
+
+**Out of scope (Minor):** Empty string keys (PAT-1), provider ID format (schema concern from #3), deeper ARCH-1 repo-layer refactoring.
+
+### Commit
+
+`462f1f4` — fix: use check-first pattern for DB-agnostic error handling (#4)
+
+### Verification Results (post-review)
+
+- **Full test suite:** 64/64 tests pass (7 test files)
+- **Provider route tests:** 21/21 pass
+- **TypeScript:** Compiles cleanly with `--noEmit`
