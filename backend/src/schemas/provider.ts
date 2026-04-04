@@ -39,3 +39,8 @@ export const ProviderTypeQuery = Type.Object({
   type: Type.Optional(ProviderType),
 });
 export type ProviderTypeQuery = Static<typeof ProviderTypeQuery>;
+
+export const GetKeyResponse = Type.Object({
+  key: Type.String(),
+});
+export type GetKeyResponse = Static<typeof GetKeyResponse>;
