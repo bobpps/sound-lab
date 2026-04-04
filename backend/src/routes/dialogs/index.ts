@@ -116,31 +116,26 @@ const dialogRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
   }, async (request) => {
-    const dialog = await fastify.db.dialogs.getById(request.params.dialogId);
-    if (!dialog) throw fastify.httpErrors.notFound('Dialog not found');
-    try {
-      return await fastify.db.dialogs.updateMessage(request.params.messageId, request.body);
-    } catch {
-      throw fastify.httpErrors.notFound('Message not found');
-    }
+    const dialogWithMsgs = await fastify.db.dialogs.getWithMessages(request.params.dialogId);
+    if (!dialogWithMsgs) throw fastify.httpErrors.notFound('Dialog not found');
+    const messageExists = dialogWithMsgs.messages.some(m => m.id === request.params.messageId);
+    if (!messageExists) throw fastify.httpErrors.notFound('Message not found');
+    return fastify.db.dialogs.updateMessage(request.params.messageId, request.body);
   });
 
   // DELETE /dialogs/:dialogId/messages/:messageId
   fastify.delete('/:dialogId/messages/:messageId', {
     schema: {
       params: MessageIdParam,
-      body: Type.Optional(Type.Null()),
       response: {
         204: Type.Null(),
         404: ErrorResponse,
       },
     },
   }, async (request, reply) => {
-    const dialog = await fastify.db.dialogs.getById(request.params.dialogId);
-    if (!dialog) throw fastify.httpErrors.notFound('Dialog not found');
-
     const dialogWithMsgs = await fastify.db.dialogs.getWithMessages(request.params.dialogId);
-    const messageExists = dialogWithMsgs?.messages.some(m => m.id === request.params.messageId);
+    if (!dialogWithMsgs) throw fastify.httpErrors.notFound('Dialog not found');
+    const messageExists = dialogWithMsgs.messages.some(m => m.id === request.params.messageId);
     if (!messageExists) throw fastify.httpErrors.notFound('Message not found');
 
     await fastify.db.dialogs.deleteMessage(request.params.messageId);
