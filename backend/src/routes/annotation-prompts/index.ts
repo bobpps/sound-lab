@@ -72,7 +72,7 @@ const annotationPromptRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       return reply.notFound('Annotation prompt not found');
     }
     await fastify.db.annotationPrompts.delete(request.params.id);
-    return reply.status(204).send();
+    return reply.status(204).send(null);
   });
 };
 
