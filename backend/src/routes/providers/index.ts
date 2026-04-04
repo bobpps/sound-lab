@@ -54,7 +54,7 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       return reply.notFound(`Provider ${request.params.id} not found`);
     }
     await fastify.db.providers.setKey(request.params.id, request.body.key);
-    return reply.status(204).send();
+    return reply.status(204).send(null);
   });
 
   // GET /providers/:id/key — registered before /:id to avoid routing conflicts
@@ -128,7 +128,7 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
   }, async (request, reply) => {
     await fastify.db.providers.delete(request.params.id);
-    return reply.status(204).send();
+    return reply.status(204).send(null);
   });
 };
 
