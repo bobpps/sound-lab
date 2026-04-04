@@ -1,6 +1,6 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import { Provider, ProviderTypeQuery } from '../../schemas/provider.js';
+import { Provider, ProviderTypeQuery, CreateProvider } from '../../schemas/provider.js';
 import { StringIdParam, ErrorResponse } from '../../schemas/common.js';
 
 const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -29,6 +29,27 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       return reply.notFound(`Provider ${request.params.id} not found`);
     }
     return provider;
+  });
+
+  // POST /providers
+  fastify.post('/', {
+    schema: {
+      body: CreateProvider,
+      response: {
+        201: Provider,
+        409: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const provider = await fastify.db.providers.create(request.body);
+      return reply.status(201).send(provider);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('UNIQUE constraint failed')) {
+        return reply.conflict(`Provider ${request.body.id} already exists`);
+      }
+      throw err;
+    }
   });
 };
 
