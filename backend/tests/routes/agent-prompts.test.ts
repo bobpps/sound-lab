@@ -82,4 +82,34 @@ describe('Agent prompt routes', () => {
       expect(res.statusCode).toBe(404);
     });
   });
+
+  describe('POST /agent-prompts', () => {
+    it('creates a prompt and returns 201', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/agent-prompts',
+        payload: SEED_PROMPT,
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = res.json();
+      expect(body.id).toBe(1);
+      expect(body.title).toBe('Support Agent');
+      expect(body.provider_id).toBe('openai');
+      expect(body.language).toBe('en-US');
+      expect(body.prompt).toBe('You are a helpful support agent...');
+      expect(body.created_by).toBeNull();
+      expect(body.created_at).toBeDefined();
+    });
+
+    it('returns 400 when required fields are missing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/agent-prompts',
+        payload: { title: 'Incomplete' },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+  });
 });

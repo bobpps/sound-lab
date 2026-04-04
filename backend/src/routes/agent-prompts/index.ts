@@ -12,6 +12,18 @@ const agentPromptRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     return fastify.db.agentPrompts.list();
   });
 
+  fastify.post('/', {
+    schema: {
+      body: S.CreateAgentPrompt,
+      response: {
+        201: S.AgentPrompt,
+      },
+    },
+  }, async (req, reply) => {
+    const prompt = await fastify.db.agentPrompts.create(req.body);
+    return reply.status(201).send(prompt);
+  });
+
   fastify.get('/:id', {
     schema: {
       params: IdParam,
