@@ -92,4 +92,4 @@ sound-lab/
 
 ## License
 
-Private -- internal use only.
+[MIT](LICENSE)
