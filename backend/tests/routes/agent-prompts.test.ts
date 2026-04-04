@@ -142,4 +142,33 @@ describe('Agent prompt routes', () => {
       expect(res.statusCode).toBe(404);
     });
   });
+
+  describe('DELETE /agent-prompts/:id', () => {
+    it('deletes a prompt and returns 204', async () => {
+      const created = await app.db.agentPrompts.create(SEED_PROMPT);
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/agent-prompts/${created.id}`,
+      });
+
+      expect(res.statusCode).toBe(204);
+      expect(res.body).toBe('');
+
+      const check = await app.inject({
+        method: 'GET',
+        url: `/agent-prompts/${created.id}`,
+      });
+      expect(check.statusCode).toBe(404);
+    });
+
+    it('returns 404 for non-existent id', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/agent-prompts/999',
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+  });
 });

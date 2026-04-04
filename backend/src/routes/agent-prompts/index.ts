@@ -52,6 +52,21 @@ const agentPromptRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const updated = await fastify.db.agentPrompts.update(req.params.id, req.body);
     return updated;
   });
+
+  fastify.delete('/:id', {
+    schema: {
+      params: IdParam,
+      response: {
+        204: Type.Null(),
+        404: ErrorResponse,
+      },
+    },
+  }, async (req, reply) => {
+    const existing = await fastify.db.agentPrompts.getById(req.params.id);
+    if (!existing) return reply.notFound();
+    await fastify.db.agentPrompts.delete(req.params.id);
+    return reply.status(204).send();
+  });
 };
 
 export default agentPromptRoutes;
