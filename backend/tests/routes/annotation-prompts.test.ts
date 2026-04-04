@@ -93,3 +93,51 @@ describe('GET /annotation-prompts/:id', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('POST /annotation-prompts', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    app = await buildTestApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('creates a new prompt and returns 201', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/annotation-prompts',
+      payload: {
+        title: 'New Prompt',
+        provider_id: 'openai',
+        language: 'en',
+        prompt: 'Please rate the quality.',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body).toMatchObject({
+      title: 'New Prompt',
+      provider_id: 'openai',
+      language: 'en',
+      prompt: 'Please rate the quality.',
+    });
+    expect(body.id).toBeDefined();
+    expect(body.created_at).toBeDefined();
+  });
+
+  it('returns 400 when required fields are missing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/annotation-prompts',
+      payload: {
+        title: 'Incomplete Prompt',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});
