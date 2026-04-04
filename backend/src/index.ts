@@ -1,5 +1,9 @@
 import { buildApp } from './app.js';
 
-const app = await buildApp();
-
-await app.listen({ port: 3000, host: '0.0.0.0' });
+try {
+  const app = await buildApp();
+  await app.listen({ port: 3000, host: '0.0.0.0' });
+} catch (err) {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+}
