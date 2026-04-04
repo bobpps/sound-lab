@@ -1,16 +1,16 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 export const DialogMessage = Type.Object({
-  id: Type.Number(),
-  dialog_id: Type.Number(),
-  order: Type.Number(),
+  id: Type.Integer(),
+  dialog_id: Type.Integer(),
+  order: Type.Integer(),
   character: Type.Union([Type.Literal(1), Type.Literal(2)]),
   text: Type.String(),
 });
 export type DialogMessage = Static<typeof DialogMessage>;
 
 export const Dialog = Type.Object({
-  id: Type.Number(),
+  id: Type.Integer(),
   title: Type.String(),
   description: Type.Union([Type.String(), Type.Null()]),
   language: Type.String(),
@@ -42,7 +42,7 @@ export const UpdateDialog = Type.Object({
 export type UpdateDialog = Static<typeof UpdateDialog>;
 
 export const CreateDialogMessage = Type.Object({
-  order: Type.Number(),
+  order: Type.Integer(),
   character: Type.Union([Type.Literal(1), Type.Literal(2)]),
   text: Type.String(),
 });
@@ -55,12 +55,12 @@ export const UpdateDialogMessage = Type.Object({
 export type UpdateDialogMessage = Static<typeof UpdateDialogMessage>;
 
 export const DialogIdParam = Type.Object({
-  dialogId: Type.Number(),
+  dialogId: Type.Integer(),
 });
 export type DialogIdParam = Static<typeof DialogIdParam>;
 
 export const MessageIdParam = Type.Object({
-  dialogId: Type.Number(),
-  messageId: Type.Number(),
+  dialogId: Type.Integer(),
+  messageId: Type.Integer(),
 });
 export type MessageIdParam = Static<typeof MessageIdParam>;

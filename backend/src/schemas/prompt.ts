@@ -1,7 +1,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 export const AnnotationPrompt = Type.Object({
-  id: Type.Number(),
+  id: Type.Integer(),
   title: Type.String(),
   provider_id: Type.String(),
   language: Type.String(),
@@ -28,7 +28,7 @@ export const UpdateAnnotationPrompt = Type.Object({
 export type UpdateAnnotationPrompt = Static<typeof UpdateAnnotationPrompt>;
 
 export const AgentPrompt = Type.Object({
-  id: Type.Number(),
+  id: Type.Integer(),
   title: Type.String(),
   provider_id: Type.String(),
   language: Type.String(),
