@@ -155,12 +155,12 @@ describe('Provider routes', () => {
       expect(check.statusCode).toBe(404);
     });
 
-    it('returns 204 for non-existent provider (idempotent)', async () => {
+    it('returns 404 for non-existent provider', async () => {
       const res = await app.inject({
         method: 'DELETE',
         url: '/providers/nonexistent',
       });
-      expect(res.statusCode).toBe(204);
+      expect(res.statusCode).toBe(404);
     });
   });
 

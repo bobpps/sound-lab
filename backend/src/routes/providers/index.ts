@@ -27,15 +27,12 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
   }, async (request, reply) => {
-    try {
-      const provider = await fastify.db.providers.create(request.body);
-      return reply.status(201).send(provider);
-    } catch (err) {
-      if (err instanceof Error && err.message.includes('UNIQUE constraint failed')) {
-        return reply.conflict(`Provider ${request.body.id} already exists`);
-      }
-      throw err;
+    const existing = await fastify.db.providers.getById(request.body.id);
+    if (existing) {
+      return reply.conflict(`Provider ${request.body.id} already exists`);
     }
+    const provider = await fastify.db.providers.create(request.body);
+    return reply.status(201).send(provider);
   });
 
   // PUT /providers/:id/key — registered before /:id to avoid routing conflicts
@@ -106,15 +103,12 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
   }, async (request, reply) => {
-    try {
-      const provider = await fastify.db.providers.update(request.params.id, request.body);
-      return provider;
-    } catch (err) {
-      if (err instanceof Error && err.message.includes('not found')) {
-        return reply.notFound(`Provider ${request.params.id} not found`);
-      }
-      throw err;
+    const existing = await fastify.db.providers.getById(request.params.id);
+    if (!existing) {
+      return reply.notFound(`Provider ${request.params.id} not found`);
     }
+    const provider = await fastify.db.providers.update(request.params.id, request.body);
+    return provider;
   });
 
   // DELETE /providers/:id
@@ -127,6 +121,10 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
   }, async (request, reply) => {
+    const existing = await fastify.db.providers.getById(request.params.id);
+    if (!existing) {
+      return reply.notFound(`Provider ${request.params.id} not found`);
+    }
     await fastify.db.providers.delete(request.params.id);
     return reply.status(204).send(null);
   });
