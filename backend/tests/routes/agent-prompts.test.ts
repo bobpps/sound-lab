@@ -52,4 +52,34 @@ describe('Agent prompt routes', () => {
       expect(body[0]).toHaveProperty('created_at');
     });
   });
+
+  describe('GET /agent-prompts/:id', () => {
+    it('returns a prompt by id', async () => {
+      const created = await app.db.agentPrompts.create(SEED_PROMPT);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/agent-prompts/${created.id}`,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.id).toBe(created.id);
+      expect(body.title).toBe('Support Agent');
+      expect(body.provider_id).toBe('openai');
+      expect(body.language).toBe('en-US');
+      expect(body.prompt).toBe('You are a helpful support agent...');
+      expect(body.created_by).toBeNull();
+      expect(body.created_at).toBeDefined();
+    });
+
+    it('returns 404 for non-existent id', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/agent-prompts/999',
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+  });
 });
