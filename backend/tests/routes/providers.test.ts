@@ -163,4 +163,66 @@ describe('Provider routes', () => {
       expect(res.statusCode).toBe(204);
     });
   });
+
+  describe('PUT /providers/:id/key', () => {
+    it('sets an API key and returns 204', async () => {
+      await seedProvider('elevenlabs', 'ElevenLabs');
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/providers/elevenlabs/key',
+        payload: { key: 'sk-secret-12345' },
+      });
+      expect(res.statusCode).toBe(204);
+    });
+
+    it('returns 404 for non-existent provider', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/providers/nonexistent/key',
+        payload: { key: 'sk-secret' },
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 400 when key is missing', async () => {
+      await seedProvider('elevenlabs', 'ElevenLabs');
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/providers/elevenlabs/key',
+        payload: {},
+      });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe('GET /providers/:id/key', () => {
+    it('returns the decrypted key', async () => {
+      await seedProvider('elevenlabs', 'ElevenLabs');
+      await app.db.providers.setKey('elevenlabs', 'sk-secret-12345');
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/providers/elevenlabs/key',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ key: 'sk-secret-12345' });
+    });
+
+    it('returns 404 for non-existent provider', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/providers/nonexistent/key',
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 404 when provider exists but no key is set', async () => {
+      await seedProvider('elevenlabs', 'ElevenLabs');
+      const res = await app.inject({
+        method: 'GET',
+        url: '/providers/elevenlabs/key',
+      });
+      expect(res.statusCode).toBe(404);
+    });
+  });
 });
