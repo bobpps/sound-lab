@@ -68,4 +68,44 @@ describe('Provider routes', () => {
       expect(res.statusCode).toBe(404);
     });
   });
+
+  describe('POST /providers', () => {
+    it('creates a provider and returns 201', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers',
+        payload: { id: 'elevenlabs', name: 'ElevenLabs', type: 'tts' },
+      });
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({ id: 'elevenlabs', name: 'ElevenLabs', type: 'tts', enabled: true });
+    });
+
+    it('returns 409 for duplicate provider id', async () => {
+      await seedProvider('elevenlabs', 'ElevenLabs');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers',
+        payload: { id: 'elevenlabs', name: 'ElevenLabs Duplicate', type: 'tts' },
+      });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('returns 400 for missing required fields', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers',
+        payload: { id: 'test' },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 for invalid type', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers',
+        payload: { id: 'test', name: 'Test', type: 'invalid' },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+  });
 });
