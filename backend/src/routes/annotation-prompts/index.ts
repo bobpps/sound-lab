@@ -57,6 +57,23 @@ const annotationPromptRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const updated = await fastify.db.annotationPrompts.update(request.params.id, request.body);
     return updated;
   });
+
+  fastify.delete('/:id', {
+    schema: {
+      params: IdParam,
+      response: {
+        204: Type.Null(),
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const existing = await fastify.db.annotationPrompts.getById(request.params.id);
+    if (!existing) {
+      return reply.notFound('Annotation prompt not found');
+    }
+    await fastify.db.annotationPrompts.delete(request.params.id);
+    return reply.status(204).send();
+  });
 };
 
 export default annotationPromptRoutes;

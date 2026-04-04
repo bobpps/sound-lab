@@ -188,3 +188,45 @@ describe('PUT /annotation-prompts/:id', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('DELETE /annotation-prompts/:id', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    app = await buildTestApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('deletes an existing prompt and returns 204', async () => {
+    const created = await app.db.annotationPrompts.create({
+      title: 'To Delete',
+      provider_id: 'openai',
+      language: 'en',
+      prompt: 'Temporary.',
+    });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/annotation-prompts/${created.id}`,
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
+
+    // Verify it's actually gone
+    const check = await app.db.annotationPrompts.getById(created.id);
+    expect(check).toBeNull();
+  });
+
+  it('returns 404 when deleting non-existent prompt', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/annotation-prompts/9999',
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+});
