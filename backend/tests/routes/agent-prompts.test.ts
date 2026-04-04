@@ -112,4 +112,34 @@ describe('Agent prompt routes', () => {
       expect(res.statusCode).toBe(400);
     });
   });
+
+  describe('PUT /agent-prompts/:id', () => {
+    it('updates a prompt with partial fields', async () => {
+      const created = await app.db.agentPrompts.create(SEED_PROMPT);
+
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/agent-prompts/${created.id}`,
+        payload: { title: 'Updated Agent', prompt: 'New prompt text' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.id).toBe(created.id);
+      expect(body.title).toBe('Updated Agent');
+      expect(body.prompt).toBe('New prompt text');
+      expect(body.provider_id).toBe('openai');
+      expect(body.language).toBe('en-US');
+    });
+
+    it('returns 404 for non-existent id', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/agent-prompts/999',
+        payload: { title: 'Ghost' },
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+  });
 });
