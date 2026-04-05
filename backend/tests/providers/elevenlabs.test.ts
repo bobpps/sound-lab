@@ -157,4 +157,116 @@ describe('ElevenLabsTTSProvider', () => {
       );
     });
   });
+
+  describe('synthesize', () => {
+    const fakeAudio = new Uint8Array([0x49, 0x44, 0x33, 0x04]);
+
+    it('returns audio Buffer for valid request', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      const result = await provider.synthesize({
+        voiceId: 'voice-1',
+        text: 'Hello world',
+      });
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+      expect(result).toEqual(Buffer.from(fakeAudio));
+    });
+
+    it('sends correct URL with voice_id and default format', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({ voiceId: 'voice-1', text: 'Hello' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.elevenlabs.io/v1/text-to-speech/voice-1?output_format=mp3_44100_128',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'xi-api-key': 'test-api-key',
+          },
+        }),
+      );
+    });
+
+    it('sends correct request body with defaults', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({ voiceId: 'voice-1', text: 'Hello' });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody).toEqual({
+        text: 'Hello',
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+          speed: 1.0,
+        },
+      });
+    });
+
+    it('uses custom format when provided', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({
+        voiceId: 'voice-1',
+        text: 'Hello',
+        format: 'pcm_24000',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.elevenlabs.io/v1/text-to-speech/voice-1?output_format=pcm_24000',
+        expect.anything(),
+      );
+    });
+
+    it('maps temperature to inverted stability', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({
+        voiceId: 'voice-1',
+        text: 'Hello',
+        temperature: 0.8,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody.voice_settings.stability).toBeCloseTo(0.2);
+    });
+
+    it('clamps temperature to [0, 1] before inverting', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({
+        voiceId: 'voice-1',
+        text: 'Hello',
+        temperature: 1.5,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody.voice_settings.stability).toBe(0);
+    });
+
+    it('uses custom speed when provided', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({
+        voiceId: 'voice-1',
+        text: 'Hello',
+        speed: 1.5,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody.voice_settings.speed).toBe(1.5);
+    });
+
+    it('throws on non-200 response', async () => {
+      mockFetch.mockResolvedValue(new Response('Bad Request', { status: 400 }));
+
+      await expect(
+        provider.synthesize({ voiceId: 'voice-1', text: 'Hello' }),
+      ).rejects.toThrow('ElevenLabs API error: 400');
+    });
+  });
 });

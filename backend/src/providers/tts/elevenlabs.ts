@@ -38,6 +38,10 @@ function mapVoice(v: ElevenLabsVoice): IVoice {
   };
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
 export class ElevenLabsTTSProvider implements ITTSProvider {
   readonly id = 'elevenlabs';
   readonly name = 'ElevenLabs';
@@ -57,8 +61,38 @@ export class ElevenLabsTTSProvider implements ITTSProvider {
     return data.voices.map(mapVoice);
   }
 
-  async synthesize(_opts: ISynthesizeOptions): Promise<Buffer> {
-    throw new Error('Not implemented');
+  async synthesize(opts: ISynthesizeOptions): Promise<Buffer> {
+    const format = opts.format ?? 'mp3_44100_128';
+    const speed = opts.speed ?? 1.0;
+    const stability = opts.temperature !== undefined
+      ? 1 - clamp(opts.temperature, 0, 1)
+      : 0.5;
+
+    const url = `${BASE_URL}/v1/text-to-speech/${opts.voiceId}?output_format=${format}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': this.apiKey,
+      },
+      body: JSON.stringify({
+        text: opts.text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability,
+          similarity_boost: 0.75,
+          speed,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`ElevenLabs API error: ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
   }
 
   async validateCredentials(): Promise<boolean> {
