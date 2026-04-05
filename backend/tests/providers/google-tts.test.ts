@@ -50,6 +50,21 @@ describe('GoogleTTSProvider', () => {
         'Invalid Google credentials: apiKey must be a JSON string with client_email and private_key',
       );
     });
+
+    it('throws when JSON parses to a non-object value', () => {
+      expect(() => new GoogleTTSProvider('null')).toThrow(
+        'Invalid Google credentials: apiKey must be a JSON string with client_email and private_key',
+      );
+      expect(() => new GoogleTTSProvider('"string"')).toThrow(
+        'Invalid Google credentials: apiKey must be a JSON string with client_email and private_key',
+      );
+      expect(() => new GoogleTTSProvider('123')).toThrow(
+        'Invalid Google credentials: apiKey must be a JSON string with client_email and private_key',
+      );
+      expect(() => new GoogleTTSProvider('[]')).toThrow(
+        'Invalid Google credentials: apiKey must be a JSON string with client_email and private_key',
+      );
+    });
   });
 
   describe('validateCredentials', () => {

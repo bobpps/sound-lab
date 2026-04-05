@@ -19,6 +19,12 @@ function parseCredentials(apiKey: string): GoogleCredentials {
     );
   }
 
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      'Invalid Google credentials: apiKey must be a JSON string with client_email and private_key',
+    );
+  }
+
   const creds = parsed as Record<string, unknown>;
   if (
     typeof creds.client_email !== 'string' ||
