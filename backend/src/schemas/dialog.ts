@@ -31,27 +31,27 @@ export const CreateDialog = Type.Object({
   title: Type.String(),
   description: Type.Optional(Type.String()),
   language: Type.String(),
-});
+}, { additionalProperties: false });
 export type CreateDialog = Static<typeof CreateDialog>;
 
 export const UpdateDialog = Type.Object({
   title: Type.Optional(Type.String()),
   description: Type.Optional(Type.String()),
   language: Type.Optional(Type.String()),
-});
+}, { additionalProperties: false });
 export type UpdateDialog = Static<typeof UpdateDialog>;
 
 export const CreateDialogMessage = Type.Object({
   order: Type.Integer(),
   character: Type.Union([Type.Literal(1), Type.Literal(2)]),
   text: Type.String(),
-});
+}, { additionalProperties: false });
 export type CreateDialogMessage = Static<typeof CreateDialogMessage>;
 
 export const UpdateDialogMessage = Type.Object({
   character: Type.Optional(Type.Union([Type.Literal(1), Type.Literal(2)])),
   text: Type.Optional(Type.String()),
-});
+}, { additionalProperties: false });
 export type UpdateDialogMessage = Static<typeof UpdateDialogMessage>;
 
 export const DialogIdParam = Type.Object({

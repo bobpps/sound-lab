@@ -12,6 +12,11 @@ import {
   MessageIdParam,
 } from '../../schemas/dialog.js';
 import { ErrorResponse } from '../../schemas/common.js';
+import {
+  AnnotatedDialog,
+  CreateAnnotatedDialogBody,
+  DialogAnnotationsParam,
+} from '../../schemas/annotation.js';
 
 const dialogRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   // GET /dialogs
@@ -98,8 +103,8 @@ const dialogRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const dialog = await fastify.db.dialogs.getById(request.params.dialogId);
     if (!dialog) throw fastify.httpErrors.notFound('Dialog not found');
     const msg = await fastify.db.dialogs.createMessage({
-      dialog_id: request.params.dialogId,
       ...request.body,
+      dialog_id: request.params.dialogId,
     });
     reply.status(201);
     return msg;
@@ -140,6 +145,42 @@ const dialogRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
     await fastify.db.dialogs.deleteMessage(request.params.messageId);
     reply.status(204);
+  });
+
+  // GET /dialogs/:dialogId/annotations
+  fastify.get('/:dialogId/annotations', {
+    schema: {
+      params: DialogAnnotationsParam,
+      response: {
+        200: Type.Array(AnnotatedDialog),
+        404: ErrorResponse,
+      },
+    },
+  }, async (request) => {
+    const dialog = await fastify.db.dialogs.getById(request.params.dialogId);
+    if (!dialog) throw fastify.httpErrors.notFound('Dialog not found');
+    return fastify.db.annotations.listByDialog(request.params.dialogId);
+  });
+
+  // POST /dialogs/:dialogId/annotations
+  fastify.post('/:dialogId/annotations', {
+    schema: {
+      params: DialogAnnotationsParam,
+      body: CreateAnnotatedDialogBody,
+      response: {
+        201: AnnotatedDialog,
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const dialog = await fastify.db.dialogs.getById(request.params.dialogId);
+    if (!dialog) throw fastify.httpErrors.notFound('Dialog not found');
+    const annotation = await fastify.db.annotations.create({
+      ...request.body,
+      dialog_id: request.params.dialogId,
+    });
+    reply.status(201);
+    return annotation;
   });
 };
 

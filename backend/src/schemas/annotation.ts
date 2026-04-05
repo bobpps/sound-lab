@@ -33,15 +33,21 @@ export const CreateAnnotatedDialog = Type.Object({
 });
 export type CreateAnnotatedDialog = Static<typeof CreateAnnotatedDialog>;
 
+export const CreateAnnotatedDialogBody = Type.Object({
+  provider_id: Type.String(),
+  title: Type.String(),
+}, { additionalProperties: false });
+export type CreateAnnotatedDialogBody = Static<typeof CreateAnnotatedDialogBody>;
+
 export const CreateAnnotatedMessage = Type.Object({
   dialog_message_id: Type.Integer(),
   text: Type.String(),
-});
+}, { additionalProperties: false });
 export type CreateAnnotatedMessage = Static<typeof CreateAnnotatedMessage>;
 
 export const UpdateAnnotatedMessage = Type.Object({
   text: Type.String(),
-});
+}, { additionalProperties: false });
 export type UpdateAnnotatedMessage = Static<typeof UpdateAnnotatedMessage>;
 
 export const AnnotationIdParam = Type.Object({

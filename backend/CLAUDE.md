@@ -22,6 +22,8 @@ No env vars needed for local dev. See `.env.example`. Auto-detection: if `SUPABA
 
 **TypeBox as single source of truth** — `@sinclair/typebox` for schemas that are simultaneously JSON Schema (validation/serialization) and TypeScript types. Use `.withTypeProvider<TypeBoxTypeProvider>()` for automatic type inference in handlers.
 
+**`additionalProperties: false` on all body schemas** — every `Type.Object()` used as a request body (Create\*, Update\*, etc.) must include `{ additionalProperties: false }`. Without it, Ajv passes extra fields through to handlers, and Supabase `.update(data)` will persist them — allowing clients to overwrite protected columns like `id`, `dialog_id`, or `annotated_dialog_id`. Also put URL-scoped IDs **after** the spread (`{ ...request.body, dialog_id: request.params.dialogId }`) so the URL param always wins.
+
 **Always define response schemas** — enables `fast-json-stringify` (~20-30% throughput boost) and prevents accidental data leaks (only listed fields serialized).
 
 **`@fastify/autoload`** for routes — directory names become route prefixes. `autohooks.ts` in route directories for scoped hooks (auth, etc.).
