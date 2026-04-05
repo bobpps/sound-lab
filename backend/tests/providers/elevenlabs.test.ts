@@ -268,5 +268,46 @@ describe('ElevenLabsTTSProvider', () => {
         provider.synthesize({ voiceId: 'voice-1', text: 'Hello' }),
       ).rejects.toThrow('ElevenLabs API error: 400 Bad Request');
     });
+
+    it('uses sampleRate to derive format when format is not provided', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({
+        voiceId: 'voice-1',
+        text: 'Hello',
+        sampleRate: 16000,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.elevenlabs.io/v1/text-to-speech/voice-1?output_format=pcm_16000',
+        expect.anything(),
+      );
+    });
+
+    it('prefers explicit format over sampleRate', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({
+        voiceId: 'voice-1',
+        text: 'Hello',
+        format: 'pcm_24000',
+        sampleRate: 8000,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.elevenlabs.io/v1/text-to-speech/voice-1?output_format=pcm_24000',
+        expect.anything(),
+      );
+    });
+
+    it('throws for unsupported sampleRate', async () => {
+      await expect(
+        provider.synthesize({
+          voiceId: 'voice-1',
+          text: 'Hello',
+          sampleRate: 48000,
+        }),
+      ).rejects.toThrow('Unsupported sample rate: 48000');
+    });
   });
 });

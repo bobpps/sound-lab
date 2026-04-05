@@ -42,6 +42,26 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+const SAMPLE_RATE_FORMAT: Record<number, string> = {
+  8000: 'ulaw_8000',
+  16000: 'pcm_16000',
+  22050: 'mp3_22050_32',
+  24000: 'pcm_24000',
+  44100: 'mp3_44100_128',
+};
+
+function resolveFormat(opts: ISynthesizeOptions): string {
+  if (opts.format) return opts.format;
+  if (opts.sampleRate !== undefined) {
+    const mapped = SAMPLE_RATE_FORMAT[opts.sampleRate];
+    if (!mapped) {
+      throw new Error(`Unsupported sample rate: ${opts.sampleRate}. Supported: ${Object.keys(SAMPLE_RATE_FORMAT).join(', ')}`);
+    }
+    return mapped;
+  }
+  return 'mp3_44100_128';
+}
+
 export class ElevenLabsTTSProvider implements ITTSProvider {
   readonly id = 'elevenlabs';
   readonly name = 'ElevenLabs';
@@ -63,7 +83,7 @@ export class ElevenLabsTTSProvider implements ITTSProvider {
   }
 
   async synthesize(opts: ISynthesizeOptions): Promise<Buffer> {
-    const format = opts.format ?? 'mp3_44100_128';
+    const format = resolveFormat(opts);
     const speed = opts.speed ?? 1.0;
     const stability = opts.temperature !== undefined
       ? 1 - clamp(opts.temperature, 0, 1)
