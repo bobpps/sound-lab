@@ -236,6 +236,25 @@ describe('POST /annotations/:id/messages', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('returns 400 when dialog_message_id belongs to a different dialog', async () => {
+    const { dialog: dialog1 } = await seedDialogWithMessages();
+    const { messages: dialog2Messages } = await seedDialogWithMessages();
+
+    const annotation = await app.db.annotations.create({
+      dialog_id: dialog1.id,
+      provider_id: 'elevenlabs',
+      title: 'Annotation for dialog 1',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/annotations/${annotation.id}/messages`,
+      payload: { dialog_message_id: dialog2Messages[0].id, text: '<speak>Cross-dialog</speak>' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('dialog_message_id does not belong to this dialog');
+  });
 });
 
 describe('PUT /annotations/:id/messages/:messageId', () => {

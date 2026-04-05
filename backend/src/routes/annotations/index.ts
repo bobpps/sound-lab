@@ -49,12 +49,19 @@ const annotationRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       body: CreateAnnotatedMessage,
       response: {
         201: AnnotatedMessage,
+        400: ErrorResponse,
         404: ErrorResponse,
       },
     },
   }, async (request, reply) => {
     const annotation = await fastify.db.annotations.getWithMessages(request.params.id);
     if (!annotation) throw fastify.httpErrors.notFound('Annotation not found');
+
+    const dialogWithMessages = await fastify.db.dialogs.getWithMessages(annotation.dialog_id);
+    if (!dialogWithMessages || !dialogWithMessages.messages.some(m => m.id === request.body.dialog_message_id)) {
+      throw fastify.httpErrors.badRequest('dialog_message_id does not belong to this dialog');
+    }
+
     const msg = await fastify.db.annotations.createMessage({
       annotated_dialog_id: request.params.id,
       ...request.body,
