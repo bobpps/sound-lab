@@ -191,3 +191,192 @@ describe('DELETE /annotations/:id', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+// --- Annotated message routes ---
+
+describe('POST /annotations/:id/messages', () => {
+  it('creates an annotated message and returns 201', async () => {
+    const { dialog, messages } = await seedDialogWithMessages();
+    const annotation = await app.db.annotations.create({
+      dialog_id: dialog.id,
+      provider_id: 'elevenlabs',
+      title: 'ElevenLabs v1',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/annotations/${annotation.id}/messages`,
+      payload: { dialog_message_id: messages[0].id, text: '<speak>Hello</speak>' },
+    });
+    expect(res.statusCode).toBe(201);
+
+    const body = res.json();
+    expect(body.id).toBeDefined();
+    expect(body.annotated_dialog_id).toBe(annotation.id);
+    expect(body.dialog_message_id).toBe(messages[0].id);
+    expect(body.text).toBe('<speak>Hello</speak>');
+  });
+
+  it('returns 404 when annotation does not exist', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/annotations/999/messages',
+      payload: { dialog_message_id: 1, text: '<speak>Orphan</speak>' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 400 when required fields are missing', async () => {
+    const { annotation } = await seedAnnotation();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/annotations/${annotation.id}/messages`,
+      payload: { text: 'Missing dialog_message_id' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('PUT /annotations/:id/messages/:messageId', () => {
+  it('updates an annotated message', async () => {
+    const { dialog, messages } = await seedDialogWithMessages();
+    const annotation = await app.db.annotations.create({
+      dialog_id: dialog.id,
+      provider_id: 'elevenlabs',
+      title: 'ElevenLabs v1',
+    });
+    const annotMsg = await app.db.annotations.createMessage({
+      annotated_dialog_id: annotation.id,
+      dialog_message_id: messages[0].id,
+      text: '<speak>Original</speak>',
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/annotations/${annotation.id}/messages/${annotMsg.id}`,
+      payload: { text: '<speak>Updated</speak>' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json();
+    expect(body.id).toBe(annotMsg.id);
+    expect(body.text).toBe('<speak>Updated</speak>');
+    expect(body.annotated_dialog_id).toBe(annotation.id);
+    expect(body.dialog_message_id).toBe(messages[0].id);
+  });
+
+  it('returns 404 when annotation does not exist', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/annotations/999/messages/1',
+      payload: { text: '<speak>Ghost</speak>' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 404 when message does not exist', async () => {
+    const { annotation } = await seedAnnotation();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/annotations/${annotation.id}/messages/999`,
+      payload: { text: '<speak>Ghost</speak>' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 404 when message belongs to a different annotation', async () => {
+    const { dialog, messages } = await seedDialogWithMessages();
+    const annotation1 = await app.db.annotations.create({
+      dialog_id: dialog.id,
+      provider_id: 'elevenlabs',
+      title: 'Annotation 1',
+    });
+    const annotation2 = await app.db.annotations.create({
+      dialog_id: dialog.id,
+      provider_id: 'google',
+      title: 'Annotation 2',
+    });
+    const annotMsg = await app.db.annotations.createMessage({
+      annotated_dialog_id: annotation1.id,
+      dialog_message_id: messages[0].id,
+      text: '<speak>Belongs to A1</speak>',
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/annotations/${annotation2.id}/messages/${annotMsg.id}`,
+      payload: { text: '<speak>Wrong parent</speak>' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('DELETE /annotations/:id/messages/:messageId', () => {
+  it('deletes an annotated message and returns 204', async () => {
+    const { dialog, messages } = await seedDialogWithMessages();
+    const annotation = await app.db.annotations.create({
+      dialog_id: dialog.id,
+      provider_id: 'elevenlabs',
+      title: 'ElevenLabs v1',
+    });
+    const annotMsg = await app.db.annotations.createMessage({
+      annotated_dialog_id: annotation.id,
+      dialog_message_id: messages[0].id,
+      text: '<speak>Bye</speak>',
+    });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/annotations/${annotation.id}/messages/${annotMsg.id}`,
+    });
+    expect(res.statusCode).toBe(204);
+
+    const check = await app.inject({ method: 'GET', url: `/annotations/${annotation.id}` });
+    expect(check.json().messages).toHaveLength(0);
+  });
+
+  it('returns 404 when annotation does not exist', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/annotations/999/messages/1',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 404 when message does not exist', async () => {
+    const { annotation } = await seedAnnotation();
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/annotations/${annotation.id}/messages/999`,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 404 when message belongs to a different annotation', async () => {
+    const { dialog, messages } = await seedDialogWithMessages();
+    const annotation1 = await app.db.annotations.create({
+      dialog_id: dialog.id,
+      provider_id: 'elevenlabs',
+      title: 'Annotation 1',
+    });
+    const annotation2 = await app.db.annotations.create({
+      dialog_id: dialog.id,
+      provider_id: 'google',
+      title: 'Annotation 2',
+    });
+    const annotMsg = await app.db.annotations.createMessage({
+      annotated_dialog_id: annotation1.id,
+      dialog_message_id: messages[0].id,
+      text: '<speak>Belongs to A1</speak>',
+    });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/annotations/${annotation2.id}/messages/${annotMsg.id}`,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
