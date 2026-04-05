@@ -20,19 +20,19 @@ export const CreateProvider = Type.Object({
   id: Type.String(),
   name: Type.String(),
   type: ProviderType,
-});
+}, { additionalProperties: false });
 export type CreateProvider = Static<typeof CreateProvider>;
 
 export const UpdateProvider = Type.Object({
   name: Type.Optional(Type.String()),
   type: Type.Optional(ProviderType),
   enabled: Type.Optional(Type.Boolean()),
-});
+}, { additionalProperties: false });
 export type UpdateProvider = Static<typeof UpdateProvider>;
 
 export const SetKeyBody = Type.Object({
   key: Type.String({ minLength: 1 }),
-});
+}, { additionalProperties: false });
 export type SetKeyBody = Static<typeof SetKeyBody>;
 
 export const ProviderTypeQuery = Type.Object({

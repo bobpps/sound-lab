@@ -16,7 +16,7 @@ export const CreateAnnotationPrompt = Type.Object({
   provider_id: Type.String(),
   language: Type.String(),
   prompt: Type.String(),
-});
+}, { additionalProperties: false });
 export type CreateAnnotationPrompt = Static<typeof CreateAnnotationPrompt>;
 
 export const UpdateAnnotationPrompt = Type.Object({
@@ -24,7 +24,7 @@ export const UpdateAnnotationPrompt = Type.Object({
   provider_id: Type.Optional(Type.String()),
   language: Type.Optional(Type.String()),
   prompt: Type.Optional(Type.String()),
-});
+}, { additionalProperties: false });
 export type UpdateAnnotationPrompt = Static<typeof UpdateAnnotationPrompt>;
 
 export const AgentPrompt = Type.Object({
@@ -43,7 +43,7 @@ export const CreateAgentPrompt = Type.Object({
   provider_id: Type.String(),
   language: Type.String(),
   prompt: Type.String(),
-});
+}, { additionalProperties: false });
 export type CreateAgentPrompt = Static<typeof CreateAgentPrompt>;
 
 export const UpdateAgentPrompt = Type.Object({
@@ -51,5 +51,5 @@ export const UpdateAgentPrompt = Type.Object({
   provider_id: Type.Optional(Type.String()),
   language: Type.Optional(Type.String()),
   prompt: Type.Optional(Type.String()),
-});
+}, { additionalProperties: false });
 export type UpdateAgentPrompt = Static<typeof UpdateAgentPrompt>;
