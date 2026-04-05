@@ -69,7 +69,7 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       return reply.notFound(`Provider ${request.params.id} not found`);
     }
     const key = await fastify.db.providers.getDecryptedKey(request.params.id);
-    if (!key) {
+    if (key === null) {
       return reply.notFound(`No API key set for provider ${request.params.id}`);
     }
     return { key };

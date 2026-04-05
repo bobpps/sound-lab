@@ -31,7 +31,7 @@ export const UpdateProvider = Type.Object({
 export type UpdateProvider = Static<typeof UpdateProvider>;
 
 export const SetKeyBody = Type.Object({
-  key: Type.String(),
+  key: Type.String({ minLength: 1 }),
 });
 export type SetKeyBody = Static<typeof SetKeyBody>;
 
