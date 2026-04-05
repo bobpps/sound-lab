@@ -199,4 +199,136 @@ describe('GoogleTTSProvider', () => {
       );
     });
   });
+
+  describe('synthesize', () => {
+    const fakeAudioContent = new Uint8Array([0x49, 0x44, 0x33, 0x04]);
+
+    it('returns audio Buffer for valid request', async () => {
+      mockSynthesizeSpeech.mockResolvedValue([{ audioContent: fakeAudioContent }]);
+
+      const result = await provider.synthesize({
+        voiceId: 'en-US-Wavenet-A',
+        text: 'Hello world',
+      });
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+      expect(result).toEqual(Buffer.from(fakeAudioContent));
+    });
+
+    it('sends correct request with defaults', async () => {
+      mockSynthesizeSpeech.mockResolvedValue([{ audioContent: fakeAudioContent }]);
+
+      await provider.synthesize({
+        voiceId: 'en-US-Wavenet-A',
+        text: 'Hello world',
+      });
+
+      expect(mockSynthesizeSpeech).toHaveBeenCalledWith({
+        input: { text: 'Hello world' },
+        voice: { languageCode: 'en-US', name: 'en-US-Wavenet-A' },
+        audioConfig: {
+          audioEncoding: 'MP3',
+          speakingRate: 1.0,
+        },
+      });
+    });
+
+    it('extracts languageCode from voiceId prefix', async () => {
+      mockSynthesizeSpeech.mockResolvedValue([{ audioContent: fakeAudioContent }]);
+
+      await provider.synthesize({
+        voiceId: 'de-DE-Standard-B',
+        text: 'Hallo Welt',
+      });
+
+      expect(mockSynthesizeSpeech).toHaveBeenCalledWith(
+        expect.objectContaining({
+          voice: { languageCode: 'de-DE', name: 'de-DE-Standard-B' },
+        }),
+      );
+    });
+
+    it('extracts languageCode from three-part locale voiceId', async () => {
+      mockSynthesizeSpeech.mockResolvedValue([{ audioContent: fakeAudioContent }]);
+
+      await provider.synthesize({
+        voiceId: 'cmn-CN-Wavenet-A',
+        text: 'Hello',
+      });
+
+      expect(mockSynthesizeSpeech).toHaveBeenCalledWith(
+        expect.objectContaining({
+          voice: { languageCode: 'cmn-CN', name: 'cmn-CN-Wavenet-A' },
+        }),
+      );
+    });
+
+    it('uses custom speed as speakingRate', async () => {
+      mockSynthesizeSpeech.mockResolvedValue([{ audioContent: fakeAudioContent }]);
+
+      await provider.synthesize({
+        voiceId: 'en-US-Wavenet-A',
+        text: 'Hello',
+        speed: 1.5,
+      });
+
+      expect(mockSynthesizeSpeech).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audioConfig: expect.objectContaining({ speakingRate: 1.5 }),
+        }),
+      );
+    });
+
+    it('maps format string to audioEncoding', async () => {
+      mockSynthesizeSpeech.mockResolvedValue([{ audioContent: fakeAudioContent }]);
+
+      await provider.synthesize({
+        voiceId: 'en-US-Wavenet-A',
+        text: 'Hello',
+        format: 'OGG_OPUS',
+      });
+
+      expect(mockSynthesizeSpeech).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audioConfig: expect.objectContaining({ audioEncoding: 'OGG_OPUS' }),
+        }),
+      );
+    });
+
+    it('includes sampleRateHertz when sampleRate is provided', async () => {
+      mockSynthesizeSpeech.mockResolvedValue([{ audioContent: fakeAudioContent }]);
+
+      await provider.synthesize({
+        voiceId: 'en-US-Wavenet-A',
+        text: 'Hello',
+        sampleRate: 16000,
+      });
+
+      expect(mockSynthesizeSpeech).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audioConfig: expect.objectContaining({ sampleRateHertz: 16000 }),
+        }),
+      );
+    });
+
+    it('does not include sampleRateHertz when sampleRate is not provided', async () => {
+      mockSynthesizeSpeech.mockResolvedValue([{ audioContent: fakeAudioContent }]);
+
+      await provider.synthesize({
+        voiceId: 'en-US-Wavenet-A',
+        text: 'Hello',
+      });
+
+      const callArgs = mockSynthesizeSpeech.mock.calls[0]![0];
+      expect(callArgs.audioConfig).not.toHaveProperty('sampleRateHertz');
+    });
+
+    it('throws on API error', async () => {
+      mockSynthesizeSpeech.mockRejectedValue(new Error('Quota exceeded'));
+
+      await expect(
+        provider.synthesize({ voiceId: 'en-US-Wavenet-A', text: 'Hello' }),
+      ).rejects.toThrow('Google TTS API error: Quota exceeded');
+    });
+  });
 });

@@ -48,6 +48,16 @@ function resolveGender(ssmlGender: string | number | null | undefined): string |
   return undefined;
 }
 
+function extractLanguageCode(voiceId: string): string {
+  // Voice IDs follow the pattern: "languageCode-VoiceType-Letter"
+  // e.g. "en-US-Wavenet-A" → "en-US", "cmn-CN-Wavenet-A" → "cmn-CN"
+  const parts = voiceId.split('-');
+  if (parts.length >= 2) {
+    return `${parts[0]}-${parts[1]}`;
+  }
+  return voiceId;
+}
+
 export class GoogleTTSProvider implements ITTSProvider {
   readonly id = 'google';
   readonly name = 'Google Cloud TTS';
@@ -84,8 +94,32 @@ export class GoogleTTSProvider implements ITTSProvider {
     }));
   }
 
-  async synthesize(_opts: ISynthesizeOptions): Promise<Buffer> {
-    throw new Error('Not implemented');
+  async synthesize(opts: ISynthesizeOptions): Promise<Buffer> {
+    const audioConfig: Record<string, unknown> = {
+      audioEncoding: opts.format ?? 'MP3',
+      speakingRate: opts.speed ?? 1.0,
+    };
+
+    if (opts.sampleRate !== undefined) {
+      audioConfig.sampleRateHertz = opts.sampleRate;
+    }
+
+    let response;
+    try {
+      [response] = await this.client.synthesizeSpeech({
+        input: { text: opts.text },
+        voice: {
+          languageCode: extractLanguageCode(opts.voiceId),
+          name: opts.voiceId,
+        },
+        audioConfig,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Google TTS API error: ${message}`);
+    }
+
+    return Buffer.from(response!.audioContent as Uint8Array);
   }
 
   async validateCredentials(): Promise<boolean> {
