@@ -123,3 +123,71 @@ describe('POST /dialogs/:dialogId/annotations', () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+// --- Annotation-specific routes ---
+
+describe('GET /annotations/:id', () => {
+  it('returns annotation with messages', async () => {
+    const { dialog, messages } = await seedDialogWithMessages();
+    const annotation = await app.db.annotations.create({
+      dialog_id: dialog.id,
+      provider_id: 'elevenlabs',
+      title: 'ElevenLabs v1',
+    });
+    await app.db.annotations.createMessage({
+      annotated_dialog_id: annotation.id,
+      dialog_message_id: messages[0].id,
+      text: '<speak>Hello</speak>',
+    });
+    await app.db.annotations.createMessage({
+      annotated_dialog_id: annotation.id,
+      dialog_message_id: messages[1].id,
+      text: '<speak>Hi there</speak>',
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/annotations/${annotation.id}` });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json();
+    expect(body.id).toBe(annotation.id);
+    expect(body.dialog_id).toBe(dialog.id);
+    expect(body.provider_id).toBe('elevenlabs');
+    expect(body.title).toBe('ElevenLabs v1');
+    expect(body.messages).toHaveLength(2);
+    expect(body.messages[0].text).toBe('<speak>Hello</speak>');
+    expect(body.messages[1].text).toBe('<speak>Hi there</speak>');
+  });
+
+  it('returns annotation with empty messages array', async () => {
+    const { annotation } = await seedAnnotation();
+
+    const res = await app.inject({ method: 'GET', url: `/annotations/${annotation.id}` });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json();
+    expect(body.id).toBe(annotation.id);
+    expect(body.messages).toEqual([]);
+  });
+
+  it('returns 404 for non-existent annotation', async () => {
+    const res = await app.inject({ method: 'GET', url: '/annotations/999' });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('DELETE /annotations/:id', () => {
+  it('deletes an annotation and returns 204', async () => {
+    const { annotation } = await seedAnnotation();
+
+    const res = await app.inject({ method: 'DELETE', url: `/annotations/${annotation.id}` });
+    expect(res.statusCode).toBe(204);
+
+    const check = await app.inject({ method: 'GET', url: `/annotations/${annotation.id}` });
+    expect(check.statusCode).toBe(404);
+  });
+
+  it('returns 404 for non-existent annotation', async () => {
+    const res = await app.inject({ method: 'DELETE', url: '/annotations/999' });
+    expect(res.statusCode).toBe(404);
+  });
+});
