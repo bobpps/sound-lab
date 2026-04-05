@@ -54,7 +54,8 @@ export class ElevenLabsTTSProvider implements ITTSProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`ElevenLabs API error: ${response.status}`);
+      const body = await response.text();
+      throw new Error(`ElevenLabs API error: ${response.status} ${body}`);
     }
 
     const data = (await response.json()) as ElevenLabsVoicesResponse;
@@ -88,7 +89,8 @@ export class ElevenLabsTTSProvider implements ITTSProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`ElevenLabs API error: ${response.status}`);
+      const body = await response.text();
+      throw new Error(`ElevenLabs API error: ${response.status} ${body}`);
     }
 
     const arrayBuffer = await response.arrayBuffer();

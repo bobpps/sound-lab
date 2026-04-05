@@ -147,13 +147,13 @@ describe('ElevenLabsTTSProvider', () => {
       expect(voices).toEqual([]);
     });
 
-    it('throws on non-200 response', async () => {
+    it('throws on non-200 response with body', async () => {
       mockFetch.mockResolvedValue(
         new Response('Server Error', { status: 500 }),
       );
 
       await expect(provider.getVoices()).rejects.toThrow(
-        'ElevenLabs API error: 500',
+        'ElevenLabs API error: 500 Server Error',
       );
     });
   });
@@ -261,12 +261,12 @@ describe('ElevenLabsTTSProvider', () => {
       expect(callBody.voice_settings.speed).toBe(1.5);
     });
 
-    it('throws on non-200 response', async () => {
+    it('throws on non-200 response with body', async () => {
       mockFetch.mockResolvedValue(new Response('Bad Request', { status: 400 }));
 
       await expect(
         provider.synthesize({ voiceId: 'voice-1', text: 'Hello' }),
-      ).rejects.toThrow('ElevenLabs API error: 400');
+      ).rejects.toThrow('ElevenLabs API error: 400 Bad Request');
     });
   });
 });
