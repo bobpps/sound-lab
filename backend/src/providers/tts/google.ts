@@ -1,5 +1,8 @@
 import { TextToSpeechClient } from '@google-cloud/text-to-speech';
+import type { protos } from '@google-cloud/text-to-speech';
 import type { ITTSProvider, IVoice, ISynthesizeOptions } from './types.js';
+
+type IAudioConfig = protos.google.cloud.texttospeech.v1.IAudioConfig;
 
 interface GoogleCredentials {
   client_email: string;
@@ -78,11 +81,11 @@ export class GoogleTTSProvider implements ITTSProvider {
       throw new Error(`Google TTS API error: ${message}`);
     }
 
-    const voices = response.voices ?? [];
+    const voices = (response.voices ?? []).filter((v) => v.name);
 
     return voices.map((v) => ({
-      id: v.name!,
-      name: v.name!,
+      id: v.name as string,
+      name: v.name as string,
       language: v.languageCodes?.[0] ?? 'unknown',
       gender: resolveGender(v.ssmlGender),
       description: undefined,
@@ -95,8 +98,8 @@ export class GoogleTTSProvider implements ITTSProvider {
   }
 
   async synthesize(opts: ISynthesizeOptions): Promise<Buffer> {
-    const audioConfig: Record<string, unknown> = {
-      audioEncoding: opts.format ?? 'MP3',
+    const audioConfig: IAudioConfig = {
+      audioEncoding: (opts.format ?? 'MP3') as IAudioConfig['audioEncoding'],
       speakingRate: opts.speed ?? 1.0,
     };
 
@@ -119,7 +122,11 @@ export class GoogleTTSProvider implements ITTSProvider {
       throw new Error(`Google TTS API error: ${message}`);
     }
 
-    return Buffer.from(response!.audioContent as Uint8Array);
+    if (!response?.audioContent) {
+      throw new Error('Google TTS API error: empty audio response');
+    }
+
+    return Buffer.from(response.audioContent as Uint8Array);
   }
 
   async validateCredentials(): Promise<boolean> {

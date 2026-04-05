@@ -183,6 +183,32 @@ describe('GoogleTTSProvider', () => {
       expect(voices).toEqual([]);
     });
 
+    it('filters out voices with null name', async () => {
+      mockListVoices.mockResolvedValue([
+        {
+          voices: [
+            {
+              name: 'en-US-Wavenet-A',
+              languageCodes: ['en-US'],
+              ssmlGender: 'FEMALE',
+              naturalSampleRateHertz: 24000,
+            },
+            {
+              name: null,
+              languageCodes: ['en-US'],
+              ssmlGender: 'MALE',
+              naturalSampleRateHertz: 24000,
+            },
+          ],
+        },
+      ]);
+
+      const voices = await provider.getVoices();
+
+      expect(voices).toHaveLength(1);
+      expect(voices[0]!.id).toBe('en-US-Wavenet-A');
+    });
+
     it('calls listVoices with empty request', async () => {
       mockListVoices.mockResolvedValue([{ voices: [] }]);
 
@@ -321,6 +347,14 @@ describe('GoogleTTSProvider', () => {
 
       const callArgs = mockSynthesizeSpeech.mock.calls[0]![0];
       expect(callArgs.audioConfig).not.toHaveProperty('sampleRateHertz');
+    });
+
+    it('throws on empty audio response', async () => {
+      mockSynthesizeSpeech.mockResolvedValue([{ audioContent: null }]);
+
+      await expect(
+        provider.synthesize({ voiceId: 'en-US-Wavenet-A', text: 'Hello' }),
+      ).rejects.toThrow('Google TTS API error: empty audio response');
     });
 
     it('throws on API error', async () => {
