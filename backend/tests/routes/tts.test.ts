@@ -2,24 +2,25 @@ import { buildTestApp } from '../helpers.js';
 import type { FastifyInstance } from 'fastify';
 import type { IVoice } from '../../src/providers/tts/types.js';
 
-const mockGetVoices = vi.fn<() => Promise<IVoice[]>>();
-const mockSynthesize = vi.fn<() => Promise<Buffer>>();
-
-vi.mock('../../src/providers/tts/registry.js', () => ({
-  createTTSProvider: vi.fn(() => ({
-    id: 'test-provider',
-    name: 'Test Provider',
-    getVoices: mockGetVoices,
-    synthesize: mockSynthesize,
-    validateCredentials: vi.fn().mockResolvedValue(true),
-  })),
-}));
-
 describe('TTS routes', () => {
   let app: FastifyInstance;
+  let mockGetVoices: ReturnType<typeof vi.fn>;
+  let mockSynthesize: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
+    mockGetVoices = vi.fn<() => Promise<IVoice[]>>();
+    mockSynthesize = vi.fn<() => Promise<Buffer>>();
+
     app = await buildTestApp();
+
+    // Override the createTTSProvider decorator with a mock factory
+    (app as Record<string, unknown>).createTTSProvider = vi.fn(() => ({
+      id: 'test-provider',
+      name: 'Test Provider',
+      getVoices: mockGetVoices,
+      synthesize: mockSynthesize,
+      validateCredentials: vi.fn().mockResolvedValue(true),
+    }));
   });
 
   afterEach(async () => {
