@@ -25,7 +25,7 @@ describe('GoogleTTSProvider', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('id and name', () => {
