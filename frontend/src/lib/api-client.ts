@@ -72,16 +72,7 @@ export const api = {
     const response = await fetch(buildUrl(path), {
       method: 'DELETE',
     });
-    if (!response.ok && response.status !== 204) {
-      let message = response.statusText;
-      try {
-        const body: ApiErrorResponse = await response.json();
-        message = body.message || message;
-      } catch {
-        // Response body wasn't JSON — keep statusText
-      }
-      throw new ApiError(response.status, message);
-    }
+    await handleResponse<void>(response);
   },
 
   async fetchRaw(path: string, opts?: RequestInit): Promise<Response> {
