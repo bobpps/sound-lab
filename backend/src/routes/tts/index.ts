@@ -1,9 +1,35 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
+import type { FastifyReply } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import { ProviderIdParam, Voice, SynthesizeBody } from '../../schemas/tts.js';
 import { ErrorResponse } from '../../schemas/common.js';
+import type { ITTSProvider } from '../../providers/tts/types.js';
 
 const ttsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
+  async function resolveTTSProvider(
+    providerId: string,
+    reply: FastifyReply,
+  ): Promise<ITTSProvider | null> {
+    const provider = await fastify.db.providers.getById(providerId);
+    if (!provider || provider.type !== 'tts') {
+      reply.notFound(`TTS provider ${providerId} not found`);
+      return null;
+    }
+
+    const apiKey = await fastify.db.providers.getDecryptedKey(providerId);
+    if (!apiKey) {
+      reply.badRequest(`No API key configured for provider ${providerId}`);
+      return null;
+    }
+
+    try {
+      return fastify.createTTSProvider(providerId, apiKey);
+    } catch {
+      reply.badRequest(`Provider ${providerId} is not supported`);
+      return null;
+    }
+  }
+
   // GET /tts/:providerId/voices
   fastify.get('/:providerId/voices', {
     schema: {
@@ -15,19 +41,9 @@ const ttsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
   }, async (request, reply) => {
-    const { providerId } = request.params;
+    const tts = await resolveTTSProvider(request.params.providerId, reply);
+    if (!tts) return;
 
-    const provider = await fastify.db.providers.getById(providerId);
-    if (!provider || provider.type !== 'tts') {
-      return reply.notFound(`TTS provider ${providerId} not found`);
-    }
-
-    const apiKey = await fastify.db.providers.getDecryptedKey(providerId);
-    if (!apiKey) {
-      return reply.badRequest(`No API key configured for provider ${providerId}`);
-    }
-
-    const tts = fastify.createTTSProvider(providerId, apiKey);
     const voices = await tts.getVoices();
     return voices;
   });
@@ -43,21 +59,10 @@ const ttsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
   }, async (request, reply) => {
-    const { providerId } = request.params;
+    const tts = await resolveTTSProvider(request.params.providerId, reply);
+    if (!tts) return;
 
-    const provider = await fastify.db.providers.getById(providerId);
-    if (!provider || provider.type !== 'tts') {
-      return reply.notFound(`TTS provider ${providerId} not found`);
-    }
-
-    const apiKey = await fastify.db.providers.getDecryptedKey(providerId);
-    if (!apiKey) {
-      return reply.badRequest(`No API key configured for provider ${providerId}`);
-    }
-
-    const tts = fastify.createTTSProvider(providerId, apiKey);
     const audio = await tts.synthesize(request.body);
-    // Binary response — no 200 schema defined, so we bypass TypeBox's strict send() typing
     void reply.type('audio/mpeg');
     return reply.send(audio as never);
   });

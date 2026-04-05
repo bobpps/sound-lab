@@ -83,6 +83,20 @@ describe('TTS routes', () => {
 
       expect(res.statusCode).toBe(400);
     });
+
+    it('returns 400 when provider is not supported by registry', async () => {
+      await seedTTSProvider('unsupported', 'Unsupported');
+      (app as Record<string, unknown>).createTTSProvider = vi.fn(() => {
+        throw new Error('Unsupported TTS provider: unsupported');
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/tts/unsupported/voices',
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
   });
 
   describe('POST /tts/:providerId/synthesize', () => {
