@@ -63,8 +63,8 @@ const annotationRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     }
 
     const msg = await fastify.db.annotations.createMessage({
-      annotated_dialog_id: request.params.id,
       ...request.body,
+      annotated_dialog_id: request.params.id,
     });
     reply.status(201);
     return msg;

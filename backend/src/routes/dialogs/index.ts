@@ -103,8 +103,8 @@ const dialogRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const dialog = await fastify.db.dialogs.getById(request.params.dialogId);
     if (!dialog) throw fastify.httpErrors.notFound('Dialog not found');
     const msg = await fastify.db.dialogs.createMessage({
-      dialog_id: request.params.dialogId,
       ...request.body,
+      dialog_id: request.params.dialogId,
     });
     reply.status(201);
     return msg;
@@ -176,8 +176,8 @@ const dialogRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const dialog = await fastify.db.dialogs.getById(request.params.dialogId);
     if (!dialog) throw fastify.httpErrors.notFound('Dialog not found');
     const annotation = await fastify.db.annotations.create({
-      dialog_id: request.params.dialogId,
       ...request.body,
+      dialog_id: request.params.dialogId,
     });
     reply.status(201);
     return annotation;
