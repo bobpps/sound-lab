@@ -32,7 +32,7 @@ describe('InworldTTSProvider', () => {
 
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.inworld.ai/tts/v1/voices',
+        'https://api.inworld.ai/voices/v1/voices',
         { headers: { Authorization: 'Basic test-api-key' } },
       );
     });
@@ -60,18 +60,20 @@ describe('InworldTTSProvider', () => {
         {
           voiceId: 'voice-1',
           displayName: 'Luna',
-          languages: ['en-US', 'es-ES'],
+          langCode: 'EN_US',
           description: 'A warm conversational voice',
           tags: ['female', 'conversational', 'warm'],
-          isCustom: false,
+          source: 'SYSTEM',
+          name: 'workspaces/default/voices/voice-1',
         },
         {
           voiceId: 'voice-2',
           displayName: 'Atlas',
-          languages: ['en-GB'],
+          langCode: 'EN_US',
           description: null,
           tags: ['male', 'authoritative'],
-          isCustom: true,
+          source: 'IVC',
+          name: 'workspaces/default/voices/voice-2',
         },
       ],
     };
@@ -87,14 +89,14 @@ describe('InworldTTSProvider', () => {
       expect(voices[0]).toEqual({
         id: 'voice-1',
         name: 'Luna',
-        language: 'en-US',
+        language: 'en',
         gender: 'female',
         description: 'A warm conversational voice',
         previewUrl: undefined,
         providerMeta: {
-          languages: ['en-US', 'es-ES'],
+          langCode: 'EN_US',
           tags: ['female', 'conversational', 'warm'],
-          isCustom: false,
+          source: 'SYSTEM',
         },
       });
     });
@@ -109,26 +111,35 @@ describe('InworldTTSProvider', () => {
       expect(voices[1].gender).toBe('male');
     });
 
-    it('uses first language from array and falls back to en', async () => {
-      const responseWithEmpty = {
+    it('extracts language prefix from langCode and falls back to en', async () => {
+      const responseWithEmptyLang = {
         voices: [
           {
             voiceId: 'voice-3',
             displayName: 'Echo',
-            languages: [],
+            langCode: '',
             description: null,
             tags: [],
-            isCustom: false,
+            source: 'SYSTEM',
+          },
+          {
+            voiceId: 'voice-4',
+            displayName: 'Aria',
+            langCode: 'ES_ES',
+            description: null,
+            tags: [],
+            source: 'SYSTEM',
           },
         ],
       };
       mockFetch.mockResolvedValue(
-        new Response(JSON.stringify(responseWithEmpty), { status: 200 }),
+        new Response(JSON.stringify(responseWithEmptyLang), { status: 200 }),
       );
 
       const voices = await provider.getVoices();
 
       expect(voices[0].language).toBe('en');
+      expect(voices[1].language).toBe('es');
     });
 
     it('handles voice with no tags and null description', async () => {
@@ -137,10 +148,10 @@ describe('InworldTTSProvider', () => {
           {
             voiceId: 'voice-4',
             displayName: 'Silent',
-            languages: ['fr-FR'],
+            langCode: 'FR_FR',
             description: null,
             tags: [],
-            isCustom: false,
+            source: 'SYSTEM',
           },
         ],
       };
@@ -153,14 +164,14 @@ describe('InworldTTSProvider', () => {
       expect(voices[0]).toEqual({
         id: 'voice-4',
         name: 'Silent',
-        language: 'fr-FR',
+        language: 'fr',
         gender: undefined,
         description: undefined,
         previewUrl: undefined,
         providerMeta: {
-          languages: ['fr-FR'],
+          langCode: 'FR_FR',
           tags: [],
-          isCustom: false,
+          source: 'SYSTEM',
         },
       });
     });
@@ -173,7 +184,7 @@ describe('InworldTTSProvider', () => {
       await provider.getVoices();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.inworld.ai/tts/v1/voices',
+        'https://api.inworld.ai/voices/v1/voices',
         { headers: { Authorization: 'Basic test-api-key' } },
       );
     });

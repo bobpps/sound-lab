@@ -7,10 +7,11 @@ const DEFAULT_MODEL = 'inworld-tts-1.5-max';
 interface InworldVoice {
   voiceId: string;
   displayName: string;
-  languages: string[];
+  langCode: string;
   description: string | null;
   tags: string[];
-  isCustom: boolean;
+  source: string;
+  name?: string;
 }
 
 interface InworldVoicesResponse {
@@ -24,7 +25,7 @@ interface InworldSynthesizeResponse {
 
 // Module-level helpers
 function mapVoice(v: InworldVoice): IVoice {
-  const language = v.languages?.[0] ?? 'en';
+  const language = v.langCode?.split('_')[0]?.toLowerCase() || 'en';
   const gender = v.tags?.find((t) => t === 'male' || t === 'female');
   return {
     id: v.voiceId,
@@ -33,7 +34,7 @@ function mapVoice(v: InworldVoice): IVoice {
     gender,
     description: v.description ?? undefined,
     previewUrl: undefined,
-    providerMeta: { languages: v.languages, tags: v.tags, isCustom: v.isCustom },
+    providerMeta: { langCode: v.langCode, tags: v.tags, source: v.source },
   };
 }
 
@@ -57,7 +58,7 @@ export class InworldTTSProvider implements ITTSProvider {
   constructor(private readonly apiKey: string) {}
 
   async getVoices(): Promise<IVoice[]> {
-    const response = await fetch(`${BASE_URL}/tts/v1/voices`, {
+    const response = await fetch(`${BASE_URL}/voices/v1/voices`, {
       headers: { Authorization: `Basic ${this.apiKey}` },
     });
     if (!response.ok) {
@@ -93,7 +94,7 @@ export class InworldTTSProvider implements ITTSProvider {
 
   async validateCredentials(): Promise<boolean> {
     try {
-      const response = await fetch(`${BASE_URL}/tts/v1/voices`, {
+      const response = await fetch(`${BASE_URL}/voices/v1/voices`, {
         headers: { Authorization: `Basic ${this.apiKey}` },
       });
       return response.ok;
