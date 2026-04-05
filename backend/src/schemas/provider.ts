@@ -31,7 +31,7 @@ export const UpdateProvider = Type.Object({
 export type UpdateProvider = Static<typeof UpdateProvider>;
 
 export const SetKeyBody = Type.Object({
-  key: Type.String(),
+  key: Type.String({ minLength: 1 }),
 });
 export type SetKeyBody = Static<typeof SetKeyBody>;
 
@@ -39,3 +39,8 @@ export const ProviderTypeQuery = Type.Object({
   type: Type.Optional(ProviderType),
 });
 export type ProviderTypeQuery = Static<typeof ProviderTypeQuery>;
+
+export const GetKeyResponse = Type.Object({
+  key: Type.String(),
+});
+export type GetKeyResponse = Static<typeof GetKeyResponse>;
