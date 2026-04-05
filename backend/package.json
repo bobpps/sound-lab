@@ -16,6 +16,7 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/sensible": "^6.0.4",
     "@fastify/type-provider-typebox": "^6.1.0",
+    "@google-cloud/text-to-speech": "^6.4.0",
     "@sinclair/typebox": "^0.34.49",
     "@supabase/supabase-js": "^2.0.0",
     "better-sqlite3": "^11.0.0",
@@ -23,8 +24,8 @@
     "fastify-plugin": "^5.1.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.0.0",
     "@eslint/js": "^9.39.4",
+    "@types/better-sqlite3": "^7.0.0",
     "@types/node": "^22.0.0",
     "eslint": "^9.39.4",
     "globals": "^17.4.0",
