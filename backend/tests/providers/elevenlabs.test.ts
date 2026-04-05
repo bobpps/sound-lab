@@ -53,4 +53,108 @@ describe('ElevenLabsTTSProvider', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('getVoices', () => {
+    const voicesResponse = {
+      voices: [
+        {
+          voice_id: 'voice-1',
+          name: 'Rachel',
+          category: 'professional',
+          labels: { gender: 'female', accent: 'American', age: 'young' },
+          description: 'A warm voice',
+          preview_url: 'https://example.com/rachel.mp3',
+          verified_languages: [{ language: 'en', locale: 'en-US' }],
+          settings: { stability: 0.5, similarity_boost: 0.75 },
+        },
+        {
+          voice_id: 'voice-2',
+          name: 'Adam',
+          category: 'premade',
+          labels: { gender: 'male' },
+          description: null,
+          preview_url: null,
+          verified_languages: [],
+        },
+      ],
+    };
+
+    it('returns mapped IVoice array', async () => {
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify(voicesResponse), { status: 200 }),
+      );
+
+      const voices = await provider.getVoices();
+
+      expect(voices).toHaveLength(2);
+      expect(voices[0]).toEqual({
+        id: 'voice-1',
+        name: 'Rachel',
+        language: 'en-US',
+        gender: 'female',
+        description: 'A warm voice',
+        previewUrl: 'https://example.com/rachel.mp3',
+        providerMeta: {
+          category: 'professional',
+          labels: { gender: 'female', accent: 'American', age: 'young' },
+          settings: { stability: 0.5, similarity_boost: 0.75 },
+        },
+      });
+    });
+
+    it('handles voice with missing optional fields', async () => {
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify(voicesResponse), { status: 200 }),
+      );
+
+      const voices = await provider.getVoices();
+
+      expect(voices[1]).toEqual({
+        id: 'voice-2',
+        name: 'Adam',
+        language: 'en',
+        gender: 'male',
+        description: undefined,
+        previewUrl: undefined,
+        providerMeta: {
+          category: 'premade',
+          labels: { gender: 'male' },
+          settings: undefined,
+        },
+      });
+    });
+
+    it('sends correct request with API key', async () => {
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ voices: [] }), { status: 200 }),
+      );
+
+      await provider.getVoices();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.elevenlabs.io/v1/voices',
+        { headers: { 'xi-api-key': 'test-api-key' } },
+      );
+    });
+
+    it('returns empty array for empty voice list', async () => {
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ voices: [] }), { status: 200 }),
+      );
+
+      const voices = await provider.getVoices();
+
+      expect(voices).toEqual([]);
+    });
+
+    it('throws on non-200 response', async () => {
+      mockFetch.mockResolvedValue(
+        new Response('Server Error', { status: 500 }),
+      );
+
+      await expect(provider.getVoices()).rejects.toThrow(
+        'ElevenLabs API error: 500',
+      );
+    });
+  });
 });
