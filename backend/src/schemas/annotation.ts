@@ -33,6 +33,12 @@ export const CreateAnnotatedDialog = Type.Object({
 });
 export type CreateAnnotatedDialog = Static<typeof CreateAnnotatedDialog>;
 
+export const CreateAnnotatedDialogBody = Type.Object({
+  provider_id: Type.String(),
+  title: Type.String(),
+});
+export type CreateAnnotatedDialogBody = Static<typeof CreateAnnotatedDialogBody>;
+
 export const CreateAnnotatedMessage = Type.Object({
   dialog_message_id: Type.Integer(),
   text: Type.String(),
