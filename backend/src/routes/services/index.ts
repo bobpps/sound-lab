@@ -1,11 +1,13 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import type { FastifyReply } from 'fastify';
-import { GenerateDialogBody, EditDialogBody } from '../../schemas/service.js';
+import { GenerateDialogBody, EditDialogBody, AutoAnnotateBody } from '../../schemas/service.js';
 import { DialogWithMessages } from '../../schemas/dialog.js';
+import { AnnotatedDialogWithMessages } from '../../schemas/annotation.js';
 import { ErrorResponse } from '../../schemas/common.js';
 import type { ILLMProvider } from '../../providers/llm/types.js';
 import { generateDialog } from '../../services/dialog-generation.js';
 import { editDialog, DialogNotFoundError, LLMResponseError } from '../../services/dialog-editing.js';
+import { autoAnnotate, AutoAnnotateError } from '../../services/auto-annotation.js';
 
 const serviceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   async function resolveLLMProvider(
@@ -91,6 +93,40 @@ const serviceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         return reply.badGateway(error.message);
       }
       throw error;
+    }
+  });
+
+  // POST /services/annotate
+  fastify.post('/annotate', {
+    schema: {
+      body: AutoAnnotateBody,
+      response: {
+        200: AnnotatedDialogWithMessages,
+        400: ErrorResponse,
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const { providerId, ...rest } = request.body;
+
+    const llmProvider = await resolveLLMProvider(providerId, reply);
+    if (!llmProvider) return;
+
+    try {
+      return await autoAnnotate({ providerId, ...rest }, { db: fastify.db, llmProvider });
+    } catch (err) {
+      if (err instanceof AutoAnnotateError) {
+        switch (err.code) {
+          case 'DIALOG_NOT_FOUND':
+          case 'PROMPT_NOT_FOUND':
+          case 'TTS_PROVIDER_NOT_FOUND':
+            return reply.notFound(err.message);
+          case 'EMPTY_DIALOG':
+          case 'PROMPT_PROVIDER_MISMATCH':
+            return reply.badRequest(err.message);
+        }
+      }
+      throw err;
     }
   });
 };
