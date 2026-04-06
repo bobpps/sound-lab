@@ -157,4 +157,14 @@ describe("ProvidersPage", () => {
       );
     });
   });
+
+  it("shows a generic error state for unexpected query failures", async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError("Network request failed"));
+
+    renderPage();
+
+    expect(
+      await screen.findByText("Unable to load providers right now."),
+    ).toBeInTheDocument();
+  });
 });

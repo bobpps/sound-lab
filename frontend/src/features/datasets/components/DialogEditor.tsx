@@ -87,6 +87,9 @@ export function DialogEditor() {
       return;
     }
 
+    // The editor keeps a local draft separate from the query cache.
+    // This hydration runs only when switching to a different dialog.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     hydrateDialog(dialogQuery.data);
     hydratedDialogIdRef.current = dialogId;
   }, [dialogId, dialogQuery.data]);

@@ -32,6 +32,14 @@ export function ProviderList({ type }: ProviderListProps) {
     );
   }
 
+  if (providersQuery.error) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        Unable to load providers right now.
+      </div>
+    );
+  }
+
   if (!providersQuery.data || providersQuery.data.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-sm text-gray-600">
