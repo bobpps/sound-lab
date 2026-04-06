@@ -101,8 +101,13 @@ describe('generateDialog service', () => {
   it('system prompt specifies JSON format, messageCount, and character constraint', async () => {
     const { generateDialog } = await import('../../src/services/dialog-generation.js');
 
+    const sixMessageResponse = JSON.stringify([
+      { character: 1, text: 'A' }, { character: 2, text: 'B' },
+      { character: 1, text: 'C' }, { character: 2, text: 'D' },
+      { character: 1, text: 'E' }, { character: 2, text: 'F' },
+    ]);
     const mockComplete = vi.fn<(messages: ILLMMessage[], model: string) => Promise<string>>()
-      .mockResolvedValue(VALID_LLM_RESPONSE);
+      .mockResolvedValue(sixMessageResponse);
     const llm = createMockLLMProvider({ complete: mockComplete });
     const { repo, mockGetWithMessages } = createMockDialogRepo();
     mockGetWithMessages.mockResolvedValue({
@@ -347,6 +352,95 @@ describe('generateDialog service', () => {
     expect(mockCreateMessage).toHaveBeenNthCalledWith(3, {
       dialog_id: 1, order: 3, character: 1, text: 'Three',
     });
+  });
+
+  it('does not strip backticks inside message text', async () => {
+    const { generateDialog } = await import('../../src/services/dialog-generation.js');
+
+    const responseWithBackticks = JSON.stringify([
+      { character: 1, text: 'Use ```ffmpeg``` here' },
+      { character: 2, text: 'ok' },
+    ]);
+    const llm = createMockLLMProvider({
+      complete: vi.fn<(messages: ILLMMessage[], model: string) => Promise<string>>()
+        .mockResolvedValue(responseWithBackticks),
+    });
+    const { repo, mockCreateMessage, mockGetWithMessages } = createMockDialogRepo();
+    mockGetWithMessages.mockResolvedValue({
+      id: 1, title: 'Test', description: null, language: 'en-US',
+      created_by: null, created_at: '2026-01-01T00:00:00.000Z',
+      messages: [],
+    });
+
+    await generateDialog({
+      llmProvider: llm,
+      dialogRepo: repo,
+      model: 'gpt-4o',
+      language: 'en-US',
+      prompt: 'Markdown dialog',
+      messageCount: 2,
+    });
+
+    expect(mockCreateMessage).toHaveBeenCalledTimes(2);
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(1, {
+      dialog_id: 1, order: 1, character: 1, text: 'Use ```ffmpeg``` here',
+    });
+  });
+
+  it('throws when LLM returns fewer messages than requested', async () => {
+    const { generateDialog } = await import('../../src/services/dialog-generation.js');
+
+    const shortResponse = JSON.stringify([
+      { character: 1, text: 'Hello' },
+    ]);
+    const llm = createMockLLMProvider({
+      complete: vi.fn<(messages: ILLMMessage[], model: string) => Promise<string>>()
+        .mockResolvedValue(shortResponse),
+    });
+    const { repo } = createMockDialogRepo();
+
+    await expect(generateDialog({
+      llmProvider: llm,
+      dialogRepo: repo,
+      model: 'gpt-4o',
+      language: 'en-US',
+      prompt: 'Test',
+      messageCount: 4,
+    })).rejects.toThrow('LLM returned 1 messages, but 4 were requested');
+  });
+
+  it('cleans up dialog when message creation fails', async () => {
+    const { generateDialog } = await import('../../src/services/dialog-generation.js');
+
+    const llmResponse = JSON.stringify([
+      { character: 1, text: 'Hello' },
+      { character: 2, text: 'Hi' },
+      { character: 1, text: 'Bye' },
+    ]);
+    const llm = createMockLLMProvider({
+      complete: vi.fn<(messages: ILLMMessage[], model: string) => Promise<string>>()
+        .mockResolvedValue(llmResponse),
+    });
+    const { repo, mockCreateMessage } = createMockDialogRepo();
+
+    // Fail on the second message
+    mockCreateMessage
+      .mockResolvedValueOnce({ id: 10, dialog_id: 1, order: 1, character: 1, text: 'Hello' })
+      .mockRejectedValueOnce(new Error('DB write failed'));
+
+    const mockDelete = vi.fn<(id: number) => Promise<void>>().mockResolvedValue(undefined);
+    repo.delete = mockDelete;
+
+    await expect(generateDialog({
+      llmProvider: llm,
+      dialogRepo: repo,
+      model: 'gpt-4o',
+      language: 'en-US',
+      prompt: 'Test',
+      messageCount: 3,
+    })).rejects.toThrow('DB write failed');
+
+    expect(mockDelete).toHaveBeenCalledWith(1);
   });
 
   it('system prompt includes the language', async () => {

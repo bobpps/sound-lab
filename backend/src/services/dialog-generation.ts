@@ -32,12 +32,13 @@ function buildSystemPrompt(language: string, messageCount: number): string {
 }
 
 function extractJSON(raw: string): string {
-  // Strip markdown code fences if present
-  const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  const trimmed = raw.trim();
+  // Strip markdown code fences only when the entire response is wrapped
+  const fenceMatch = trimmed.match(/^```(?:json)?\s*\n([\s\S]*?)\n\s*```$/);
   if (fenceMatch) {
     return fenceMatch[1].trim();
   }
-  return raw.trim();
+  return trimmed;
 }
 
 function parseAndValidate(raw: string): LLMDialogMessage[] {
@@ -87,26 +88,40 @@ export async function generateDialog(params: GenerateDialogParams): Promise<Dial
   ];
 
   const raw = await llmProvider.complete(messages, model);
-  const parsedMessages = parseAndValidate(raw).slice(0, messageCount);
+  const allMessages = parseAndValidate(raw);
+
+  if (allMessages.length < messageCount) {
+    throw new Error(
+      `LLM returned ${allMessages.length} messages, but ${messageCount} were requested`,
+    );
+  }
+
+  const parsedMessages = allMessages.slice(0, messageCount);
 
   // Create dialog — title derived from prompt (truncate if too long)
   const title = prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt;
   const dialog = await dialogRepo.create({ title, language });
 
-  // Create messages in order
-  for (let i = 0; i < parsedMessages.length; i++) {
-    await dialogRepo.createMessage({
-      dialog_id: dialog.id,
-      order: i + 1,
-      character: parsedMessages[i].character as 1 | 2,
-      text: parsedMessages[i].text,
-    });
-  }
+  try {
+    // Create messages in order
+    for (let i = 0; i < parsedMessages.length; i++) {
+      await dialogRepo.createMessage({
+        dialog_id: dialog.id,
+        order: i + 1,
+        character: parsedMessages[i].character as 1 | 2,
+        text: parsedMessages[i].text,
+      });
+    }
 
-  // Return full dialog with messages
-  const result = await dialogRepo.getWithMessages(dialog.id);
-  if (!result) {
-    throw new Error('Failed to retrieve created dialog');
+    // Return full dialog with messages
+    const result = await dialogRepo.getWithMessages(dialog.id);
+    if (!result) {
+      throw new Error('Failed to retrieve created dialog');
+    }
+    return result;
+  } catch (error) {
+    // Compensating cleanup: remove partially created dialog (CASCADE deletes messages)
+    await dialogRepo.delete(dialog.id);
+    throw error;
   }
-  return result;
 }
