@@ -1,10 +1,11 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import type { FastifyReply } from 'fastify';
-import { GenerateDialogBody } from '../../schemas/service.js';
+import { GenerateDialogBody, EditDialogBody } from '../../schemas/service.js';
 import { DialogWithMessages } from '../../schemas/dialog.js';
 import { ErrorResponse } from '../../schemas/common.js';
 import type { ILLMProvider } from '../../providers/llm/types.js';
 import { generateDialog } from '../../services/dialog-generation.js';
+import { editDialog, DialogNotFoundError, LLMResponseError } from '../../services/dialog-editing.js';
 
 const serviceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   async function resolveLLMProvider(
@@ -59,6 +60,38 @@ const serviceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
     reply.status(201);
     return result;
+  });
+
+  // POST /services/edit-dialog
+  fastify.post('/edit-dialog', {
+    schema: {
+      body: EditDialogBody,
+      response: { 200: DialogWithMessages, 400: ErrorResponse, 404: ErrorResponse, 502: ErrorResponse },
+    },
+  }, async (request, reply) => {
+    const { dialogId, providerId, model, instructions } = request.body;
+
+    const llm = await resolveLLMProvider(providerId, reply);
+    if (!llm) return;
+
+    try {
+      const result = await editDialog({
+        dialogId,
+        llmProvider: llm,
+        instructions,
+        model,
+        db: fastify.db,
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof DialogNotFoundError) {
+        return reply.notFound(error.message);
+      }
+      if (error instanceof LLMResponseError) {
+        return reply.badGateway(error.message);
+      }
+      throw error;
+    }
   });
 };
 
