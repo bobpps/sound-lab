@@ -1,11 +1,13 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import type { FastifyReply } from 'fastify';
-import { GenerateDialogBody, EditDialogBody } from '../../schemas/service.js';
+import { GenerateDialogBody, EditDialogBody, AutoAnnotateBody } from '../../schemas/service.js';
 import { DialogWithMessages } from '../../schemas/dialog.js';
+import { AnnotatedDialogWithMessages } from '../../schemas/annotation.js';
 import { ErrorResponse } from '../../schemas/common.js';
 import type { ILLMProvider } from '../../providers/llm/types.js';
 import { generateDialog } from '../../services/dialog-generation.js';
 import { editDialog, DialogNotFoundError, LLMResponseError } from '../../services/dialog-editing.js';
+import { autoAnnotate } from '../../services/auto-annotation.js';
 
 const serviceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   async function resolveLLMProvider(
@@ -91,6 +93,36 @@ const serviceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         return reply.badGateway(error.message);
       }
       throw error;
+    }
+  });
+
+  // POST /services/annotate
+  fastify.post('/annotate', {
+    schema: {
+      body: AutoAnnotateBody,
+      response: {
+        200: AnnotatedDialogWithMessages,
+        400: ErrorResponse,
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const { providerId, ...rest } = request.body;
+
+    const llmProvider = await resolveLLMProvider(providerId, reply);
+    if (!llmProvider) return;
+
+    try {
+      return await autoAnnotate({ providerId, ...rest }, { db: fastify.db, llmProvider });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('not found')) {
+        return reply.notFound(message);
+      }
+      if (message.includes('no messages')) {
+        return reply.badRequest(message);
+      }
+      throw err;
     }
   });
 };
