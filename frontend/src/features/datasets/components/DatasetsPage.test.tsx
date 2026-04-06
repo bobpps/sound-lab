@@ -40,7 +40,7 @@ describe("DatasetsPage", () => {
       screen.getByRole("heading", { name: "Prompts" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Prompt management lands in the next task/i),
+      screen.getByText(/No prompts yet/i),
     ).toBeInTheDocument();
   });
 });
