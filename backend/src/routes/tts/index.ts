@@ -5,6 +5,22 @@ import { ProviderIdParam, Voice, SynthesizeBody } from '../../schemas/tts.js';
 import { ErrorResponse } from '../../schemas/common.js';
 import type { ITTSProvider } from '../../providers/tts/types.js';
 
+const FORMAT_MIME: Record<string, string> = {
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  flac: 'audio/flac',
+  pcm: 'audio/pcm',
+  linear16: 'audio/wav',
+  ogg_opus: 'audio/ogg',
+};
+
+function audioContentType(format?: string): string {
+  if (!format) return 'audio/mpeg';
+  const key = format.toLowerCase().split('_')[0];
+  return FORMAT_MIME[key] ?? FORMAT_MIME[format.toLowerCase()] ?? 'application/octet-stream';
+}
+
 const ttsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   async function resolveTTSProvider(
     providerId: string,
@@ -63,7 +79,7 @@ const ttsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     if (!tts) return;
 
     const audio = await tts.synthesize(request.body);
-    void reply.type('audio/mpeg');
+    void reply.type(audioContentType(request.body.format));
     return reply.send(audio as never);
   });
 };

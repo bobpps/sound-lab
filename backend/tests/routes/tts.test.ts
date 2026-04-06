@@ -196,5 +196,33 @@ describe('TTS routes', () => {
 
       expect(res.statusCode).toBe(400);
     });
+
+    it('derives content-type from requested format', async () => {
+      await seedTTSProvider();
+      mockSynthesize.mockResolvedValueOnce(Buffer.from('wav-data'));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/tts/elevenlabs/synthesize',
+        payload: { voiceId: 'v1', text: 'Hello', format: 'wav' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('audio/wav');
+    });
+
+    it('falls back to application/octet-stream for unknown format', async () => {
+      await seedTTSProvider();
+      mockSynthesize.mockResolvedValueOnce(Buffer.from('raw-data'));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/tts/elevenlabs/synthesize',
+        payload: { voiceId: 'v1', text: 'Hello', format: 'pcm_16000' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('audio/pcm');
+    });
   });
 });
