@@ -212,4 +212,24 @@ describe('AnthropicLLMProvider', () => {
       ).rejects.toThrow('Anthropic API error: Connection error');
     });
   });
+
+  describe('validateCredentials', () => {
+    it('returns true when API call succeeds', async () => {
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'hi' }],
+      });
+
+      const result = await provider.validateCredentials();
+
+      expect(result).toBe(true);
+    });
+
+    it('returns false when API call throws', async () => {
+      mockCreate.mockRejectedValue(new Error('authentication_error'));
+
+      const result = await provider.validateCredentials();
+
+      expect(result).toBe(false);
+    });
+  });
 });

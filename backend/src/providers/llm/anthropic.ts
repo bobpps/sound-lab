@@ -52,4 +52,17 @@ export class AnthropicLLMProvider implements ILLMProvider {
       .map((block) => block.text)
       .join('');
   }
+
+  async validateCredentials(): Promise<boolean> {
+    try {
+      await this.client.messages.create({
+        model: 'claude-haiku-3-5-20241022',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
