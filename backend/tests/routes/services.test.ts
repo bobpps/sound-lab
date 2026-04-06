@@ -43,6 +43,44 @@ describe('Services routes', () => {
     return dialog;
   }
 
+  async function seedTTSProvider(id = 'elevenlabs', name = 'ElevenLabs') {
+    await app.db.providers.create({ id, name, type: 'tts' });
+  }
+
+  async function seedDialogWithMessages() {
+    const dialog = await app.db.dialogs.create({
+      title: 'Test Dialog',
+      language: 'en',
+    });
+    const messages = [
+      await app.db.dialogs.createMessage({ dialog_id: dialog.id, order: 1, character: 1, text: 'Hello there' }),
+      await app.db.dialogs.createMessage({ dialog_id: dialog.id, order: 2, character: 2, text: 'Hi, how are you?' }),
+      await app.db.dialogs.createMessage({ dialog_id: dialog.id, order: 3, character: 1, text: 'I am fine' }),
+    ];
+    return { dialog, messages };
+  }
+
+  async function seedAnnotationPrompt(providerId = 'elevenlabs') {
+    return app.db.annotationPrompts.create({
+      title: 'SSML Prompt',
+      provider_id: providerId,
+      language: 'en',
+      prompt: 'Annotate with SSML tags.',
+    });
+  }
+
+  function makeAnnotatePayload(overrides: Record<string, unknown> = {}) {
+    return {
+      dialogId: 1,
+      providerId: 'openai',
+      model: 'gpt-4o',
+      annotationPromptId: 1,
+      ttsProviderId: 'elevenlabs',
+      title: 'Annotated Dialog',
+      ...overrides,
+    };
+  }
+
   describe('POST /services/generate-dialog', () => {
     it('generates a dialog and returns DialogWithMessages', async () => {
       await seedLLMProvider();
@@ -398,6 +436,244 @@ describe('Services routes', () => {
       });
 
       expect(res.statusCode).toBe(502);
+    });
+  });
+
+  describe('POST /services/annotate', () => {
+    it('annotates dialog and returns AnnotatedDialogWithMessages', async () => {
+      await seedLLMProvider();
+      await seedTTSProvider();
+      const { dialog } = await seedDialogWithMessages();
+      const prompt = await seedAnnotationPrompt();
+
+      mockComplete
+        .mockResolvedValueOnce('<speak>Hello there</speak>')
+        .mockResolvedValueOnce('<speak>Hi, how are you?</speak>')
+        .mockResolvedValueOnce('<speak>I am fine</speak>');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: prompt.id,
+        }),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.dialog_id).toBe(dialog.id);
+      expect(body.provider_id).toBe('elevenlabs');
+      expect(body.title).toBe('Annotated Dialog');
+      expect(body.messages).toHaveLength(3);
+      expect(body.messages[0].text).toBe('<speak>Hello there</speak>');
+      expect(body.messages[1].text).toBe('<speak>Hi, how are you?</speak>');
+      expect(body.messages[2].text).toBe('<speak>I am fine</speak>');
+    });
+
+    it('calls createLLMProvider with correct providerId and apiKey', async () => {
+      await seedLLMProvider();
+      await seedTTSProvider();
+      const { dialog } = await seedDialogWithMessages();
+      const prompt = await seedAnnotationPrompt();
+
+      mockComplete.mockResolvedValue('<speak>text</speak>');
+
+      await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: prompt.id,
+        }),
+      });
+
+      expect(app.createLLMProvider).toHaveBeenCalledWith('openai', 'test-api-key');
+    });
+
+    it('returns 404 when dialog does not exist', async () => {
+      await seedLLMProvider();
+      await seedTTSProvider();
+      const prompt = await seedAnnotationPrompt();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: 999,
+          annotationPromptId: prompt.id,
+        }),
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().message).toContain('not found');
+    });
+
+    it('returns 404 when annotation prompt does not exist', async () => {
+      await seedLLMProvider();
+      await seedTTSProvider();
+      const { dialog } = await seedDialogWithMessages();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: 999,
+        }),
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().message).toContain('not found');
+    });
+
+    it('returns 404 when LLM provider does not exist', async () => {
+      await seedTTSProvider();
+      const { dialog } = await seedDialogWithMessages();
+      const prompt = await seedAnnotationPrompt();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: prompt.id,
+          providerId: 'nonexistent',
+        }),
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 400 when LLM provider has no API key', async () => {
+      await app.db.providers.create({ id: 'openai', name: 'OpenAI', type: 'llm' });
+      await seedTTSProvider();
+      const { dialog } = await seedDialogWithMessages();
+      const prompt = await seedAnnotationPrompt();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: prompt.id,
+        }),
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 404 when LLM provider is not of type llm', async () => {
+      await seedTTSProvider('openai', 'OpenAI-as-TTS');
+      await seedTTSProvider();
+      const { dialog } = await seedDialogWithMessages();
+      const prompt = await seedAnnotationPrompt();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: prompt.id,
+          providerId: 'openai',
+        }),
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 400 when required body fields are missing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: { dialogId: 1 },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 when dialog has no messages', async () => {
+      await seedLLMProvider();
+      await seedTTSProvider();
+      const dialog = await app.db.dialogs.create({
+        title: 'Empty Dialog',
+        language: 'en',
+      });
+      const prompt = await seedAnnotationPrompt();
+
+      mockComplete.mockResolvedValue('<speak>text</speak>');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: prompt.id,
+        }),
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().message).toContain('no messages');
+    });
+
+    it('returns 404 when TTS provider does not exist', async () => {
+      await seedLLMProvider();
+      const { dialog } = await seedDialogWithMessages();
+      const prompt = await seedAnnotationPrompt('elevenlabs');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: prompt.id,
+          ttsProviderId: 'nonexistent',
+        }),
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().message).toContain('TTS provider');
+    });
+
+    it('returns 404 when TTS provider is not of type tts', async () => {
+      await seedLLMProvider();
+      await app.db.providers.create({ id: 'elevenlabs', name: 'ElevenLabs', type: 'llm' });
+      const { dialog } = await seedDialogWithMessages();
+      const prompt = await seedAnnotationPrompt('elevenlabs');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: prompt.id,
+          ttsProviderId: 'elevenlabs',
+        }),
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().message).toContain('TTS provider');
+    });
+
+    it('returns 400 when annotation prompt provider does not match ttsProviderId', async () => {
+      await seedLLMProvider();
+      await seedTTSProvider();
+      const { dialog } = await seedDialogWithMessages();
+      const prompt = await seedAnnotationPrompt('google');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/annotate',
+        payload: makeAnnotatePayload({
+          dialogId: dialog.id,
+          annotationPromptId: prompt.id,
+          ttsProviderId: 'elevenlabs',
+        }),
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().message).toContain('google');
+      expect(res.json().message).toContain('elevenlabs');
     });
   });
 });
