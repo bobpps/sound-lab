@@ -119,8 +119,10 @@ const serviceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         switch (err.code) {
           case 'DIALOG_NOT_FOUND':
           case 'PROMPT_NOT_FOUND':
+          case 'TTS_PROVIDER_NOT_FOUND':
             return reply.notFound(err.message);
           case 'EMPTY_DIALOG':
+          case 'PROMPT_PROVIDER_MISMATCH':
             return reply.badRequest(err.message);
         }
       }

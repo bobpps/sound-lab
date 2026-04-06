@@ -2,7 +2,12 @@ import type { IDatabase } from '../db/interfaces.js';
 import type { ILLMProvider, ILLMMessage } from '../providers/llm/types.js';
 import type { AnnotatedDialogWithMessages } from '../db/types.js';
 
-export type AutoAnnotateErrorCode = 'DIALOG_NOT_FOUND' | 'PROMPT_NOT_FOUND' | 'EMPTY_DIALOG';
+export type AutoAnnotateErrorCode =
+  | 'DIALOG_NOT_FOUND'
+  | 'PROMPT_NOT_FOUND'
+  | 'EMPTY_DIALOG'
+  | 'TTS_PROVIDER_NOT_FOUND'
+  | 'PROMPT_PROVIDER_MISMATCH';
 
 export class AutoAnnotateError extends Error {
   constructor(public readonly code: AutoAnnotateErrorCode, message: string) {
@@ -33,8 +38,20 @@ export async function autoAnnotate(
   const dialog = await db.dialogs.getWithMessages(params.dialogId);
   if (!dialog) throw new AutoAnnotateError('DIALOG_NOT_FOUND', `Dialog ${params.dialogId} not found`);
 
+  const ttsProvider = await db.providers.getById(params.ttsProviderId);
+  if (!ttsProvider || ttsProvider.type !== 'tts') {
+    throw new AutoAnnotateError('TTS_PROVIDER_NOT_FOUND', `TTS provider ${params.ttsProviderId} not found`);
+  }
+
   const prompt = await db.annotationPrompts.getById(params.annotationPromptId);
   if (!prompt) throw new AutoAnnotateError('PROMPT_NOT_FOUND', `Annotation prompt ${params.annotationPromptId} not found`);
+
+  if (prompt.provider_id !== params.ttsProviderId) {
+    throw new AutoAnnotateError(
+      'PROMPT_PROVIDER_MISMATCH',
+      `Annotation prompt ${params.annotationPromptId} is for provider ${prompt.provider_id}, not ${params.ttsProviderId}`,
+    );
+  }
 
   if (dialog.messages.length === 0) throw new AutoAnnotateError('EMPTY_DIALOG', `Dialog ${params.dialogId} has no messages`);
 
@@ -54,23 +71,27 @@ export async function autoAnnotate(
     history.push({ role: 'assistant', content: response });
   }
 
-  // Write to DB: create annotated dialog
+  // Write to DB: create annotated dialog, then messages
   const annotatedDialog = await db.annotations.create({
     dialog_id: params.dialogId,
     provider_id: params.ttsProviderId,
     title: params.title,
   });
 
-  // Write to DB: create annotated messages
-  for (let i = 0; i < dialog.messages.length; i++) {
-    await db.annotations.createMessage({
-      annotated_dialog_id: annotatedDialog.id,
-      dialog_message_id: dialog.messages[i].id,
-      text: llmResponses[i],
-    });
-  }
+  try {
+    for (let i = 0; i < dialog.messages.length; i++) {
+      await db.annotations.createMessage({
+        annotated_dialog_id: annotatedDialog.id,
+        dialog_message_id: dialog.messages[i].id,
+        text: llmResponses[i],
+      });
+    }
 
-  const result = await db.annotations.getWithMessages(annotatedDialog.id);
-  if (!result) throw new Error('Failed to retrieve created annotation');
-  return result;
+    const result = await db.annotations.getWithMessages(annotatedDialog.id);
+    if (!result) throw new Error('Failed to retrieve created annotation');
+    return result;
+  } catch (err) {
+    await db.annotations.delete(annotatedDialog.id);
+    throw err;
+  }
 }

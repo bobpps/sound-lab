@@ -6,6 +6,7 @@ import type {
   AnnotatedDialog,
   AnnotatedMessage,
   AnnotatedDialogWithMessages,
+  Provider,
 } from '../../src/db/types.js';
 import { autoAnnotate, AutoAnnotateError } from '../../src/services/auto-annotation.js';
 
@@ -85,10 +86,18 @@ const baseDialog: DialogWithMessages = {
 const basePrompt: AnnotationPrompt = {
   id: 5,
   title: 'Test Prompt',
-  provider_id: 'test-llm',
+  provider_id: 'elevenlabs',
   language: 'en',
   prompt: 'Annotate the following message with SSML tags.',
   created_by: null,
+  created_at: '2026-01-01T00:00:00Z',
+};
+
+const baseTTSProvider: Provider = {
+  id: 'elevenlabs',
+  name: 'ElevenLabs',
+  type: 'tts',
+  enabled: true,
   created_at: '2026-01-01T00:00:00Z',
 };
 
@@ -116,6 +125,7 @@ describe('autoAnnotate', () => {
 
   it('calls LLM once per message with growing conversation history', async () => {
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue(baseTTSProvider);
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
     (llmProvider.complete as ReturnType<typeof vi.fn>).mockResolvedValue('annotated text');
     (db.annotations.create as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -151,6 +161,7 @@ describe('autoAnnotate', () => {
 
   it('creates AnnotatedDialog with correct fields', async () => {
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue(baseTTSProvider);
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
     (llmProvider.complete as ReturnType<typeof vi.fn>).mockResolvedValue('annotated');
     (db.annotations.create as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -176,6 +187,7 @@ describe('autoAnnotate', () => {
 
   it('creates AnnotatedMessage for each dialog message', async () => {
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue(baseTTSProvider);
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
     (llmProvider.complete as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce('annotated-1')
@@ -219,6 +231,7 @@ describe('autoAnnotate', () => {
     };
 
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue(baseTTSProvider);
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
     (llmProvider.complete as ReturnType<typeof vi.fn>).mockResolvedValue('annotated');
     (db.annotations.create as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -247,8 +260,37 @@ describe('autoAnnotate', () => {
     }
   });
 
+  it('throws AutoAnnotateError with TTS_PROVIDER_NOT_FOUND when TTS provider not found', async () => {
+    (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    try {
+      await autoAnnotate(baseParams, { db, llmProvider });
+      expect.fail('Expected AutoAnnotateError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(AutoAnnotateError);
+      expect((err as AutoAnnotateError).code).toBe('TTS_PROVIDER_NOT_FOUND');
+    }
+  });
+
+  it('throws AutoAnnotateError with TTS_PROVIDER_NOT_FOUND when provider is not TTS type', async () => {
+    (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...baseTTSProvider, type: 'llm',
+    });
+
+    try {
+      await autoAnnotate(baseParams, { db, llmProvider });
+      expect.fail('Expected AutoAnnotateError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(AutoAnnotateError);
+      expect((err as AutoAnnotateError).code).toBe('TTS_PROVIDER_NOT_FOUND');
+    }
+  });
+
   it('throws AutoAnnotateError with PROMPT_NOT_FOUND when annotation prompt not found', async () => {
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue(baseTTSProvider);
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
     try {
@@ -260,9 +302,25 @@ describe('autoAnnotate', () => {
     }
   });
 
+  it('throws AutoAnnotateError with PROMPT_PROVIDER_MISMATCH when prompt provider differs from ttsProviderId', async () => {
+    const mismatchedPrompt: AnnotationPrompt = { ...basePrompt, provider_id: 'google' };
+    (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue(baseTTSProvider);
+    (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(mismatchedPrompt);
+
+    try {
+      await autoAnnotate(baseParams, { db, llmProvider });
+      expect.fail('Expected AutoAnnotateError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(AutoAnnotateError);
+      expect((err as AutoAnnotateError).code).toBe('PROMPT_PROVIDER_MISMATCH');
+    }
+  });
+
   it('throws AutoAnnotateError with EMPTY_DIALOG when dialog has no messages', async () => {
     const emptyDialog: DialogWithMessages = { ...baseDialog, messages: [] };
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(emptyDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue(baseTTSProvider);
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
 
     try {
@@ -272,5 +330,26 @@ describe('autoAnnotate', () => {
       expect(err).toBeInstanceOf(AutoAnnotateError);
       expect((err as AutoAnnotateError).code).toBe('EMPTY_DIALOG');
     }
+  });
+
+  it('cleans up annotated dialog when createMessage fails mid-write', async () => {
+    (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
+    (db.providers.getById as ReturnType<typeof vi.fn>).mockResolvedValue(baseTTSProvider);
+    (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
+    (llmProvider.complete as ReturnType<typeof vi.fn>).mockResolvedValue('annotated');
+    (db.annotations.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 100, dialog_id: 1, provider_id: 'elevenlabs', title: 'Annotated Test Dialog',
+      created_by: null, created_at: '2026-01-01T00:00:00Z',
+    } satisfies AnnotatedDialog);
+    (db.annotations.createMessage as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        id: 1, annotated_dialog_id: 100, dialog_message_id: 10, text: 'annotated',
+      } satisfies AnnotatedMessage)
+      .mockRejectedValueOnce(new Error('DB write failed'));
+    (db.annotations.delete as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    await expect(autoAnnotate(baseParams, { db, llmProvider })).rejects.toThrow('DB write failed');
+
+    expect(db.annotations.delete).toHaveBeenCalledWith(100);
   });
 });

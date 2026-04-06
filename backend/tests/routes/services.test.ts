@@ -676,4 +676,67 @@ describe('Services routes', () => {
       expect(res.json().message).toContain('elevenlabs');
     });
   });
+
+  it('returns 404 when TTS provider does not exist', async () => {
+    await seedLLMProvider();
+    // No seedTTSProvider — elevenlabs doesn't exist
+    const { dialog } = await seedDialogWithMessages();
+    const prompt = await seedAnnotationPrompt('elevenlabs');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/services/annotate',
+      payload: makePayload({
+        dialogId: dialog.id,
+        annotationPromptId: prompt.id,
+        ttsProviderId: 'nonexistent',
+      }),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().message).toContain('TTS provider');
+  });
+
+  it('returns 404 when TTS provider is not of type tts', async () => {
+    await seedLLMProvider();
+    // Create a provider with type 'llm' instead of 'tts'
+    await app.db.providers.create({ id: 'elevenlabs', name: 'ElevenLabs', type: 'llm' });
+    const { dialog } = await seedDialogWithMessages();
+    const prompt = await seedAnnotationPrompt('elevenlabs');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/services/annotate',
+      payload: makePayload({
+        dialogId: dialog.id,
+        annotationPromptId: prompt.id,
+        ttsProviderId: 'elevenlabs',
+      }),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().message).toContain('TTS provider');
+  });
+
+  it('returns 400 when annotation prompt provider does not match ttsProviderId', async () => {
+    await seedLLMProvider();
+    await seedTTSProvider();
+    const { dialog } = await seedDialogWithMessages();
+    // Create prompt for 'google' but request annotation for 'elevenlabs'
+    const prompt = await seedAnnotationPrompt('google');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/services/annotate',
+      payload: makePayload({
+        dialogId: dialog.id,
+        annotationPromptId: prompt.id,
+        ttsProviderId: 'elevenlabs',
+      }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('google');
+    expect(res.json().message).toContain('elevenlabs');
+  });
 });
