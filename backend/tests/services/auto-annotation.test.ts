@@ -7,7 +7,7 @@ import type {
   AnnotatedMessage,
   AnnotatedDialogWithMessages,
 } from '../../src/db/types.js';
-import { autoAnnotate } from '../../src/services/auto-annotation.js';
+import { autoAnnotate, AutoAnnotateError } from '../../src/services/auto-annotation.js';
 
 function createMockDb(): IDatabase {
   return {
@@ -235,27 +235,42 @@ describe('autoAnnotate', () => {
     expect(result).toEqual(expected);
   });
 
-  it('throws when dialog not found', async () => {
+  it('throws AutoAnnotateError with DIALOG_NOT_FOUND when dialog not found', async () => {
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-    await expect(autoAnnotate(baseParams, { db, llmProvider }))
-      .rejects.toThrow('Dialog 1 not found');
+    try {
+      await autoAnnotate(baseParams, { db, llmProvider });
+      expect.fail('Expected AutoAnnotateError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(AutoAnnotateError);
+      expect((err as AutoAnnotateError).code).toBe('DIALOG_NOT_FOUND');
+    }
   });
 
-  it('throws when annotation prompt not found', async () => {
+  it('throws AutoAnnotateError with PROMPT_NOT_FOUND when annotation prompt not found', async () => {
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(baseDialog);
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-    await expect(autoAnnotate(baseParams, { db, llmProvider }))
-      .rejects.toThrow('Annotation prompt 5 not found');
+    try {
+      await autoAnnotate(baseParams, { db, llmProvider });
+      expect.fail('Expected AutoAnnotateError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(AutoAnnotateError);
+      expect((err as AutoAnnotateError).code).toBe('PROMPT_NOT_FOUND');
+    }
   });
 
-  it('throws when dialog has no messages', async () => {
+  it('throws AutoAnnotateError with EMPTY_DIALOG when dialog has no messages', async () => {
     const emptyDialog: DialogWithMessages = { ...baseDialog, messages: [] };
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(emptyDialog);
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
 
-    await expect(autoAnnotate(baseParams, { db, llmProvider }))
-      .rejects.toThrow('Dialog 1 has no messages');
+    try {
+      await autoAnnotate(baseParams, { db, llmProvider });
+      expect.fail('Expected AutoAnnotateError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(AutoAnnotateError);
+      expect((err as AutoAnnotateError).code).toBe('EMPTY_DIALOG');
+    }
   });
 });

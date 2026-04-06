@@ -7,7 +7,7 @@ import { ErrorResponse } from '../../schemas/common.js';
 import type { ILLMProvider } from '../../providers/llm/types.js';
 import { generateDialog } from '../../services/dialog-generation.js';
 import { editDialog, DialogNotFoundError, LLMResponseError } from '../../services/dialog-editing.js';
-import { autoAnnotate } from '../../services/auto-annotation.js';
+import { autoAnnotate, AutoAnnotateError } from '../../services/auto-annotation.js';
 
 const serviceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   async function resolveLLMProvider(
@@ -115,12 +115,14 @@ const serviceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     try {
       return await autoAnnotate({ providerId, ...rest }, { db: fastify.db, llmProvider });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes('not found')) {
-        return reply.notFound(message);
-      }
-      if (message.includes('no messages')) {
-        return reply.badRequest(message);
+      if (err instanceof AutoAnnotateError) {
+        switch (err.code) {
+          case 'DIALOG_NOT_FOUND':
+          case 'PROMPT_NOT_FOUND':
+            return reply.notFound(err.message);
+          case 'EMPTY_DIALOG':
+            return reply.badRequest(err.message);
+        }
       }
       throw err;
     }
