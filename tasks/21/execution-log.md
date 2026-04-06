@@ -69,3 +69,24 @@
 - `npx tsc -b --noEmit` (type check)
 - `npx eslint .` (lint)
 - Playwright: open app, verify sidebar renders, navigation works, no console errors
+
+## Phase: Implementation (complete)
+
+All 10 files created/modified as planned. Single commit: `72f4fcf`.
+
+## Phase: Review Fixes
+
+### Code-critic Major Issue: No tests (TEST-1)
+- Added `frontend/src/router.test.tsx` with 10 tests covering routing, navigation, sidebar, header
+- Extracted `AppRouteTree` from `router.tsx` to allow testing with `MemoryRouter`
+- Added test infrastructure: `vitest.config.ts`, `test-setup.ts`, `tsconfig.test.json`
+- Fixed jest-dom type augmentation: separate `tsconfig.test.json` with `@testing-library/jest-dom` types
+- Excluded test files from `tsconfig.app.json` (production build)
+
+### Minor Issues (accepted, not fixed):
+- FE-1: Pages in flat `pages/` — intentionally throwaway placeholders
+- FE-2: Inconsistent wildcard routing — `datasets/*` gets splat for planned nested routes
+- BUG-1: No 404 route — acceptable for shell PR, will add when needed
+- BUG-2: Orphaned Vite assets — cleanup is separate concern
+- QUAL-1: Module-level QueryClient — works for client-only SPA
+- QUAL-2: Four identical placeholders — will be replaced by real pages
