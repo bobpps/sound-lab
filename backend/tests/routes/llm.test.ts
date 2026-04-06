@@ -220,6 +220,43 @@ describe('LLM routes', () => {
       expect(res.statusCode).toBe(400);
     });
 
+    it('returns 400 when all messages are system role', async () => {
+      await seedLLMProvider();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/llm/openai/complete',
+        payload: {
+          messages: [{ role: 'system', content: 'You are helpful.' }],
+          model: 'gpt-4o',
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().message).toContain('non-system');
+    });
+
+    it('strips additional properties from message objects', async () => {
+      await seedLLMProvider();
+      mockComplete.mockResolvedValueOnce('response');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/llm/openai/complete',
+        payload: {
+          messages: [{ role: 'user', content: 'Hello', foo: 'bar' }],
+          model: 'gpt-4o',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      // Extra field 'foo' should be stripped by additionalProperties: false on LLMMessage
+      expect(mockComplete).toHaveBeenCalledWith(
+        [{ role: 'user', content: 'Hello' }],
+        'gpt-4o',
+      );
+    });
+
     it('strips additional properties from body', async () => {
       await seedLLMProvider();
       mockComplete.mockResolvedValueOnce('response');

@@ -12,7 +12,7 @@ export const LLMMessage = Type.Object({
     Type.Literal('assistant'),
   ]),
   content: Type.String(),
-});
+}, { additionalProperties: false });
 export type LLMMessage = Static<typeof LLMMessage>;
 
 export const CompleteBody = Type.Object({

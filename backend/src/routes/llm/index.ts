@@ -67,6 +67,12 @@ const llmRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const llm = await resolveLLMProvider(request.params.providerId, reply);
     if (!llm) return;
 
+    const hasNonSystemMessage = request.body.messages.some((m) => m.role !== 'system');
+    if (!hasNonSystemMessage) {
+      reply.badRequest('Messages must contain at least one non-system message');
+      return;
+    }
+
     const text = await llm.complete(request.body.messages, request.body.model);
     return { text };
   });
