@@ -1,21 +1,75 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppRouteTree } from "./router.tsx";
 
-function renderWithRouter(initialEntries: string[] = ["/"]) {
-  const queryClient = new QueryClient({
+const dialogsResponse = [
+  {
+    id: 1,
+    title: "Greeting practice",
+    description: "Simple hello-world exchange",
+    language: "en-US",
+    created_by: null,
+    created_at: "2026-04-06T18:00:00.000Z",
+  },
+];
+
+const dialogDetailResponse = {
+  ...dialogsResponse[0],
+  messages: [
+    {
+      id: 10,
+      dialog_id: 1,
+      order: 1,
+      character: 1,
+      text: "Hello there",
+    },
+    {
+      id: 11,
+      dialog_id: 1,
+      order: 2,
+      character: 2,
+      text: "Hi, nice to meet you",
+    },
+  ],
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+function extractUrl(input: string | URL | Request): string {
+  if (typeof input === "string") {
+    return input;
+  }
+
+  if (input instanceof URL) {
+    return input.pathname + input.search;
+  }
+
+  return input.url;
+}
+
+function createTestQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
       },
     },
   });
+}
 
+function renderWithRouter(initialEntries: string[] = ["/"]) {
   return render(
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={createTestQueryClient()}>
       <MemoryRouter initialEntries={initialEntries}>
         <AppRouteTree />
       </MemoryRouter>
@@ -23,28 +77,46 @@ function renderWithRouter(initialEntries: string[] = ["/"]) {
   );
 }
 
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL | Request) => {
+      const url = extractUrl(input);
+
+      if (url.endsWith("/api/dialogs")) {
+        return jsonResponse(dialogsResponse);
+      }
+
+      if (url.endsWith("/api/dialogs/1")) {
+        return jsonResponse(dialogDetailResponse);
+      }
+
+      if (url.includes("/api/providers?type=")) {
+        return jsonResponse([]);
+      }
+
+      return jsonResponse(
+        {
+          statusCode: 404,
+          error: "Not Found",
+          message: "Not Found",
+        },
+        404,
+      );
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("Router", () => {
-  beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
-    );
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   describe("index redirect", () => {
-    it("redirects / to /datasets", () => {
+    it("redirects / to /datasets", async () => {
       renderWithRouter(["/"]);
       expect(
-        screen.getByRole("heading", { name: "Datasets" }),
+        await screen.findByRole("heading", { name: "Datasets" }),
       ).toBeInTheDocument();
     });
   });
@@ -55,6 +127,15 @@ describe("Router", () => {
       expect(
         screen.getByRole("heading", { name: "Datasets" }),
       ).toBeInTheDocument();
+    });
+
+    it("renders Dialog Editor page at /datasets/dialogs/:dialogId", async () => {
+      renderWithRouter(["/datasets/dialogs/1"]);
+
+      expect(
+        await screen.findByRole("heading", { name: "Dialog Editor" }),
+      ).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Greeting practice")).toBeInTheDocument();
     });
 
     it("renders TTS Testing page at /tts", () => {
@@ -83,7 +164,7 @@ describe("Router", () => {
     it("renders all 4 navigation links", () => {
       renderWithRouter(["/datasets"]);
       const nav = screen.getByRole("navigation");
-      const links = screen.getAllByRole("link");
+      const links = within(nav).getAllByRole("link");
 
       expect(links).toHaveLength(4);
       expect(nav).toContainElement(links[0]);
@@ -121,7 +202,7 @@ describe("Router", () => {
       renderWithRouter(["/datasets"]);
 
       expect(
-        screen.getByRole("heading", { name: "Datasets" }),
+        await screen.findByRole("heading", { name: "Datasets" }),
       ).toBeInTheDocument();
 
       await user.click(screen.getByRole("link", { name: "TTS Testing" }));
