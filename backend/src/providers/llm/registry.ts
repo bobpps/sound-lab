@@ -1,8 +1,10 @@
 import type { ILLMProvider } from './types.js';
 import { OpenAILLMProvider } from './openai.js';
+import { AnthropicLLMProvider } from './anthropic.js';
 
 const PROVIDERS: Record<string, new (apiKey: string) => ILLMProvider> = {
   openai: OpenAILLMProvider,
+  anthropic: AnthropicLLMProvider,
 };
 
 export function createLLMProvider(providerId: string, apiKey: string): ILLMProvider {
