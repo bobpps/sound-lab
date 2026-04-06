@@ -51,7 +51,7 @@ function extractUrl(input: string | URL | Request): string {
   }
 
   if (input instanceof URL) {
-    return input.pathname;
+    return input.pathname + input.search;
   }
 
   return input.url;
@@ -89,6 +89,10 @@ beforeEach(() => {
 
       if (url.endsWith("/api/dialogs/1")) {
         return jsonResponse(dialogDetailResponse);
+      }
+
+      if (url.includes("/api/providers?type=")) {
+        return jsonResponse([]);
       }
 
       return jsonResponse(
