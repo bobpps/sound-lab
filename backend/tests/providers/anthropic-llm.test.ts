@@ -156,5 +156,27 @@ describe('AnthropicLLMProvider', () => {
 
       expect(result).toBe('');
     });
+
+    it('throws a formatted error when the API call fails', async () => {
+      mockCreate.mockRejectedValue(new Error('authentication_error: invalid x-api-key'));
+
+      await expect(
+        provider.complete(
+          [{ role: 'user', content: 'Hello' }],
+          'claude-sonnet-4-5-20250929',
+        ),
+      ).rejects.toThrow('Anthropic API error: authentication_error: invalid x-api-key');
+    });
+
+    it('throws a formatted error on network failure', async () => {
+      mockCreate.mockRejectedValue(new Error('Connection error'));
+
+      await expect(
+        provider.complete(
+          [{ role: 'user', content: 'Hello' }],
+          'claude-sonnet-4-5-20250929',
+        ),
+      ).rejects.toThrow('Anthropic API error: Connection error');
+    });
   });
 });

@@ -39,7 +39,13 @@ export class AnthropicLLMProvider implements ILLMProvider {
       params.system = systemMessages.map((m) => m.content).join('\n\n');
     }
 
-    const response = await this.client.messages.create(params);
+    let response;
+    try {
+      response = await this.client.messages.create(params);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Anthropic API error: ${message}`);
+    }
 
     const textBlock = response.content.find((block) => block.type === 'text');
     return textBlock && 'text' in textBlock ? textBlock.text : '';
