@@ -62,5 +62,6 @@ export interface IDatabase {
   annotationPrompts: IAnnotationPromptRepository;
   agentPrompts: IAgentPromptRepository;
   providers: IProviderRepository;
+  transaction<T>(fn: () => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }

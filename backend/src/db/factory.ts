@@ -19,6 +19,7 @@ export async function createDatabase(config?: DbConfig): Promise<IDatabase> {
       annotationPrompts: new SupabaseAnnotationPromptRepository(client),
       agentPrompts: new SupabaseAgentPromptRepository(client),
       providers: new SupabaseProviderRepository(client, cfg.encryptionKey),
+      async transaction<T>(fn: () => Promise<T>): Promise<T> { return fn(); },
       async close() { /* Supabase client has no explicit close */ },
     };
   }
@@ -39,6 +40,17 @@ export async function createDatabase(config?: DbConfig): Promise<IDatabase> {
     annotationPrompts: new LocalAnnotationPromptRepository(sqliteDb),
     agentPrompts: new LocalAgentPromptRepository(sqliteDb),
     providers: new LocalProviderRepository(sqliteDb, cfg.encryptionKey),
+    async transaction<T>(fn: () => Promise<T>): Promise<T> {
+      sqliteDb.exec('BEGIN');
+      try {
+        const result = await fn();
+        sqliteDb.exec('COMMIT');
+        return result;
+      } catch (e) {
+        sqliteDb.exec('ROLLBACK');
+        throw e;
+      }
+    },
     async close() { sqliteDb.close(); },
   };
 }

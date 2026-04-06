@@ -36,6 +36,13 @@ describe('Services routes', () => {
     await app.db.providers.setKey(id, 'test-api-key');
   }
 
+  async function seedDialog() {
+    const dialog = await app.db.dialogs.create({ title: 'Test', language: 'en' });
+    await app.db.dialogs.createMessage({ dialog_id: dialog.id, order: 1, character: 1, text: 'Hello' });
+    await app.db.dialogs.createMessage({ dialog_id: dialog.id, order: 2, character: 2, text: 'Hi there' });
+    return dialog;
+  }
+
   describe('POST /services/generate-dialog', () => {
     it('generates a dialog and returns DialogWithMessages', async () => {
       await seedLLMProvider();
@@ -248,6 +255,149 @@ describe('Services routes', () => {
       });
 
       expect(res.statusCode).toBe(500);
+    });
+  });
+
+  describe('POST /services/edit-dialog', () => {
+    it('edits dialog and returns 200 with updated DialogWithMessages', async () => {
+      await seedLLMProvider();
+      const dialog = await seedDialog();
+
+      mockComplete.mockResolvedValueOnce(JSON.stringify({
+        messages: [
+          { order: 1, character: 1, text: 'New hello' },
+          { order: 2, character: 2, text: 'Hi there' },
+        ],
+      }));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: {
+          dialogId: dialog.id,
+          providerId: 'openai',
+          model: 'gpt-4o',
+          instructions: 'change greeting',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.messages).toHaveLength(2);
+      expect(body.messages[0].text).toBe('New hello');
+    });
+
+    it('returns 404 when dialog does not exist', async () => {
+      await seedLLMProvider();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: { dialogId: 999, providerId: 'openai', model: 'gpt-4o', instructions: 'change greeting' },
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 404 when provider does not exist', async () => {
+      const dialog = await seedDialog();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: { dialogId: dialog.id, providerId: 'nonexistent', model: 'gpt-4o', instructions: 'change greeting' },
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 400 when provider has no API key', async () => {
+      await app.db.providers.create({ id: 'openai', name: 'OpenAI', type: 'llm' });
+      const dialog = await seedDialog();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: { dialogId: dialog.id, providerId: 'openai', model: 'gpt-4o', instructions: 'change greeting' },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 404 when provider is not LLM type', async () => {
+      await app.db.providers.create({ id: 'elevenlabs', name: 'ElevenLabs', type: 'tts' });
+      await app.db.providers.setKey('elevenlabs', 'test-key');
+      const dialog = await seedDialog();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: { dialogId: dialog.id, providerId: 'elevenlabs', model: 'some-model', instructions: 'change greeting' },
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 400 when required fields are missing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: { dialogId: 1, providerId: 'openai' },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 when instructions is empty string', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: { dialogId: 1, providerId: 'openai', model: 'gpt-4o', instructions: '' },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 500 when LLM throws an unexpected error', async () => {
+      await seedLLMProvider();
+      const dialog = await seedDialog();
+      mockComplete.mockRejectedValueOnce(new Error('Connection timeout'));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: { dialogId: dialog.id, providerId: 'openai', model: 'gpt-4o', instructions: 'change greeting' },
+      });
+
+      expect(res.statusCode).toBe(500);
+    });
+
+    it('returns 400 when LLM provider factory throws', async () => {
+      await seedLLMProvider();
+      const dialog = await seedDialog();
+      (app as Record<string, unknown>).createLLMProvider = vi.fn(() => { throw new Error('Unsupported provider'); });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: { dialogId: dialog.id, providerId: 'openai', model: 'gpt-4o', instructions: 'change greeting' },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 502 when LLM returns unparseable response', async () => {
+      await seedLLMProvider();
+      const dialog = await seedDialog();
+      mockComplete.mockResolvedValueOnce('I cannot do that');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/services/edit-dialog',
+        payload: { dialogId: dialog.id, providerId: 'openai', model: 'gpt-4o', instructions: 'change greeting' },
+      });
+
+      expect(res.statusCode).toBe(502);
     });
   });
 });

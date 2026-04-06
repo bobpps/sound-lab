@@ -8,3 +8,11 @@ export const GenerateDialogBody = Type.Object({
   messageCount: Type.Integer({ minimum: 2, maximum: 50 }),
 }, { additionalProperties: false });
 export type GenerateDialogBody = Static<typeof GenerateDialogBody>;
+
+export const EditDialogBody = Type.Object({
+  dialogId: Type.Integer(),
+  providerId: Type.String(),
+  model: Type.String(),
+  instructions: Type.String({ minLength: 1 }),
+}, { additionalProperties: false });
+export type EditDialogBody = Static<typeof EditDialogBody>;
