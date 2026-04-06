@@ -119,14 +119,14 @@ describe('autoAnnotate', () => {
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
     (llmProvider.complete as ReturnType<typeof vi.fn>).mockResolvedValue('annotated text');
     (db.annotations.create as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 100, dialog_id: 1, provider_id: 'test-llm', title: 'Annotated Test Dialog',
+      id: 100, dialog_id: 1, provider_id: 'elevenlabs', title: 'Annotated Test Dialog',
       created_by: null, created_at: '2026-01-01T00:00:00Z',
     } satisfies AnnotatedDialog);
     (db.annotations.createMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 1, annotated_dialog_id: 100, dialog_message_id: 10, text: 'annotated text',
     } satisfies AnnotatedMessage);
     (db.annotations.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 100, dialog_id: 1, provider_id: 'test-llm', title: 'Annotated Test Dialog',
+      id: 100, dialog_id: 1, provider_id: 'elevenlabs', title: 'Annotated Test Dialog',
       created_by: null, created_at: '2026-01-01T00:00:00Z', messages: [],
     } satisfies AnnotatedDialogWithMessages);
 
@@ -154,14 +154,14 @@ describe('autoAnnotate', () => {
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
     (llmProvider.complete as ReturnType<typeof vi.fn>).mockResolvedValue('annotated');
     (db.annotations.create as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 100, dialog_id: 1, provider_id: 'test-llm', title: 'Annotated Test Dialog',
+      id: 100, dialog_id: 1, provider_id: 'elevenlabs', title: 'Annotated Test Dialog',
       created_by: null, created_at: '2026-01-01T00:00:00Z',
     } satisfies AnnotatedDialog);
     (db.annotations.createMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 1, annotated_dialog_id: 100, dialog_message_id: 10, text: 'annotated',
     } satisfies AnnotatedMessage);
     (db.annotations.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 100, dialog_id: 1, provider_id: 'test-llm', title: 'Annotated Test Dialog',
+      id: 100, dialog_id: 1, provider_id: 'elevenlabs', title: 'Annotated Test Dialog',
       created_by: null, created_at: '2026-01-01T00:00:00Z', messages: [],
     } satisfies AnnotatedDialogWithMessages);
 
@@ -169,7 +169,7 @@ describe('autoAnnotate', () => {
 
     expect(db.annotations.create).toHaveBeenCalledWith({
       dialog_id: 1,
-      provider_id: 'test-llm',
+      provider_id: 'elevenlabs',
       title: 'Annotated Test Dialog',
     });
   });
@@ -182,14 +182,14 @@ describe('autoAnnotate', () => {
       .mockResolvedValueOnce('annotated-2')
       .mockResolvedValueOnce('annotated-3');
     (db.annotations.create as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 100, dialog_id: 1, provider_id: 'test-llm', title: 'Annotated Test Dialog',
+      id: 100, dialog_id: 1, provider_id: 'elevenlabs', title: 'Annotated Test Dialog',
       created_by: null, created_at: '2026-01-01T00:00:00Z',
     } satisfies AnnotatedDialog);
     (db.annotations.createMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 1, annotated_dialog_id: 100, dialog_message_id: 10, text: 'annotated',
     } satisfies AnnotatedMessage);
     (db.annotations.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 100, dialog_id: 1, provider_id: 'test-llm', title: 'Annotated Test Dialog',
+      id: 100, dialog_id: 1, provider_id: 'elevenlabs', title: 'Annotated Test Dialog',
       created_by: null, created_at: '2026-01-01T00:00:00Z', messages: [],
     } satisfies AnnotatedDialogWithMessages);
 
@@ -209,7 +209,7 @@ describe('autoAnnotate', () => {
 
   it('returns AnnotatedDialogWithMessages', async () => {
     const expected: AnnotatedDialogWithMessages = {
-      id: 100, dialog_id: 1, provider_id: 'test-llm', title: 'Annotated Test Dialog',
+      id: 100, dialog_id: 1, provider_id: 'elevenlabs', title: 'Annotated Test Dialog',
       created_by: null, created_at: '2026-01-01T00:00:00Z',
       messages: [
         { id: 1, annotated_dialog_id: 100, dialog_message_id: 10, text: 'annotated-1' },
@@ -222,7 +222,7 @@ describe('autoAnnotate', () => {
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
     (llmProvider.complete as ReturnType<typeof vi.fn>).mockResolvedValue('annotated');
     (db.annotations.create as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: 100, dialog_id: 1, provider_id: 'test-llm', title: 'Annotated Test Dialog',
+      id: 100, dialog_id: 1, provider_id: 'elevenlabs', title: 'Annotated Test Dialog',
       created_by: null, created_at: '2026-01-01T00:00:00Z',
     } satisfies AnnotatedDialog);
     (db.annotations.createMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -239,7 +239,7 @@ describe('autoAnnotate', () => {
     (db.dialogs.getWithMessages as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
     await expect(autoAnnotate(baseParams, { db, llmProvider }))
-      .rejects.toThrow('Dialog not found');
+      .rejects.toThrow('Dialog 1 not found');
   });
 
   it('throws when annotation prompt not found', async () => {
@@ -247,7 +247,7 @@ describe('autoAnnotate', () => {
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
     await expect(autoAnnotate(baseParams, { db, llmProvider }))
-      .rejects.toThrow('Annotation prompt not found');
+      .rejects.toThrow('Annotation prompt 5 not found');
   });
 
   it('throws when dialog has no messages', async () => {
@@ -256,6 +256,6 @@ describe('autoAnnotate', () => {
     (db.annotationPrompts.getById as ReturnType<typeof vi.fn>).mockResolvedValue(basePrompt);
 
     await expect(autoAnnotate(baseParams, { db, llmProvider }))
-      .rejects.toThrow('Dialog has no messages');
+      .rejects.toThrow('Dialog 1 has no messages');
   });
 });

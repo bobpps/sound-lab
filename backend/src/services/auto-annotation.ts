@@ -23,42 +23,46 @@ export async function autoAnnotate(
   const { db, llmProvider } = deps;
 
   const dialog = await db.dialogs.getWithMessages(params.dialogId);
-  if (!dialog) throw new Error('Dialog not found');
+  if (!dialog) throw new Error(`Dialog ${params.dialogId} not found`);
 
   const prompt = await db.annotationPrompts.getById(params.annotationPromptId);
-  if (!prompt) throw new Error('Annotation prompt not found');
+  if (!prompt) throw new Error(`Annotation prompt ${params.annotationPromptId} not found`);
 
-  if (dialog.messages.length === 0) throw new Error('Dialog has no messages');
+  if (dialog.messages.length === 0) throw new Error(`Dialog ${params.dialogId} has no messages`);
 
+  // Collect all LLM responses first
+  const systemMessage: ILLMMessage = { role: 'system', content: prompt.prompt };
+  const history: ILLMMessage[] = [];
+  const llmResponses: string[] = [];
+
+  for (const message of dialog.messages) {
+    const userMessage: ILLMMessage = { role: 'user', content: message.text };
+    const messages: ILLMMessage[] = [systemMessage, ...history, userMessage];
+
+    const response = await llmProvider.complete(messages, params.model);
+    llmResponses.push(response);
+
+    history.push(userMessage);
+    history.push({ role: 'assistant', content: response });
+  }
+
+  // Write to DB: create annotated dialog
   const annotatedDialog = await db.annotations.create({
     dialog_id: params.dialogId,
-    provider_id: params.providerId,
+    provider_id: params.ttsProviderId,
     title: params.title,
   });
 
-  const history: ILLMMessage[] = [];
-
-  for (const message of dialog.messages) {
-    const messages: ILLMMessage[] = [
-      { role: 'system', content: prompt.prompt },
-      ...history,
-      { role: 'user', content: message.text },
-    ];
-
-    const annotatedText = await llmProvider.complete(messages, params.model);
-
-    history.push(
-      { role: 'user', content: message.text },
-      { role: 'assistant', content: annotatedText },
-    );
-
+  // Write to DB: create annotated messages
+  for (let i = 0; i < dialog.messages.length; i++) {
     await db.annotations.createMessage({
       annotated_dialog_id: annotatedDialog.id,
-      dialog_message_id: message.id,
-      text: annotatedText,
+      dialog_message_id: dialog.messages[i].id,
+      text: llmResponses[i],
     });
   }
 
   const result = await db.annotations.getWithMessages(annotatedDialog.id);
-  return result!;
+  if (!result) throw new Error('Failed to retrieve created annotation');
+  return result;
 }
