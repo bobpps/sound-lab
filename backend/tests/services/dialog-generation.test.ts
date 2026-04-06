@@ -313,6 +313,42 @@ describe('generateDialog service', () => {
     })).rejects.toThrow();
   });
 
+  it('truncates messages to messageCount when LLM returns more', async () => {
+    const { generateDialog } = await import('../../src/services/dialog-generation.js');
+
+    const extraMessages = JSON.stringify([
+      { character: 1, text: 'One' },
+      { character: 2, text: 'Two' },
+      { character: 1, text: 'Three' },
+      { character: 2, text: 'Four' },
+      { character: 1, text: 'Five' },
+    ]);
+    const llm = createMockLLMProvider({
+      complete: vi.fn<(messages: ILLMMessage[], model: string) => Promise<string>>()
+        .mockResolvedValue(extraMessages),
+    });
+    const { repo, mockCreateMessage, mockGetWithMessages } = createMockDialogRepo();
+    mockGetWithMessages.mockResolvedValue({
+      id: 1, title: 'Test', description: null, language: 'en-US',
+      created_by: null, created_at: '2026-01-01T00:00:00.000Z',
+      messages: [],
+    });
+
+    await generateDialog({
+      llmProvider: llm,
+      dialogRepo: repo,
+      model: 'gpt-4o',
+      language: 'en-US',
+      prompt: 'Test',
+      messageCount: 3,
+    });
+
+    expect(mockCreateMessage).toHaveBeenCalledTimes(3);
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(3, {
+      dialog_id: 1, order: 3, character: 1, text: 'Three',
+    });
+  });
+
   it('system prompt includes the language', async () => {
     const { generateDialog } = await import('../../src/services/dialog-generation.js');
 

@@ -87,7 +87,7 @@ export async function generateDialog(params: GenerateDialogParams): Promise<Dial
   ];
 
   const raw = await llmProvider.complete(messages, model);
-  const parsedMessages = parseAndValidate(raw);
+  const parsedMessages = parseAndValidate(raw).slice(0, messageCount);
 
   // Create dialog — title derived from prompt (truncate if too long)
   const title = prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt;
