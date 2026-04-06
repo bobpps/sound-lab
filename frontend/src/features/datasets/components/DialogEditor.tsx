@@ -57,6 +57,7 @@ export function DialogEditor() {
   const deleteMessage = useDeleteMessage();
 
   const tempIdRef = useRef(0);
+  const hydratedDialogIdRef = useRef<number | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [language, setLanguage] = useState("");
@@ -64,18 +65,31 @@ export function DialogEditor() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formNotice, setFormNotice] = useState<string | null>(null);
 
+  function hydrateDialog(dialog: DialogWithMessages) {
+    setTitle(dialog.title);
+    setDescription(dialog.description ?? "");
+    setLanguage(dialog.language);
+    setMessages(dialog.messages.map(toEditableMessage));
+    setFormError(null);
+    setFormNotice(null);
+  }
+
   useEffect(() => {
-    if (!dialogQuery.data) {
+    hydratedDialogIdRef.current = null;
+  }, [dialogId]);
+
+  useEffect(() => {
+    if (!dialogQuery.data || dialogId === null) {
       return;
     }
 
-    setTitle(dialogQuery.data.title);
-    setDescription(dialogQuery.data.description ?? "");
-    setLanguage(dialogQuery.data.language);
-    setMessages(dialogQuery.data.messages.map(toEditableMessage));
-    setFormError(null);
-    setFormNotice(null);
-  }, [dialogQuery.data]);
+    if (hydratedDialogIdRef.current === dialogId) {
+      return;
+    }
+
+    hydrateDialog(dialogQuery.data);
+    hydratedDialogIdRef.current = dialogId;
+  }, [dialogId, dialogQuery.data]);
 
   function clearFeedback() {
     if (formError) {
@@ -166,7 +180,11 @@ export function DialogEditor() {
         updateMessage,
       });
 
-      await dialogQuery.refetch();
+      const refreshedDialog = await dialogQuery.refetch();
+      if (refreshedDialog.data) {
+        hydrateDialog(refreshedDialog.data);
+        hydratedDialogIdRef.current = dialogId;
+      }
       setFormNotice("Dialog saved.");
     } catch (error) {
       setFormError(
