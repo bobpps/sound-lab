@@ -220,8 +220,9 @@ describe('LLM routes', () => {
       expect(res.statusCode).toBe(400);
     });
 
-    it('rejects additional properties in body', async () => {
+    it('strips additional properties from body', async () => {
       await seedLLMProvider();
+      mockComplete.mockResolvedValueOnce('response');
 
       const res = await app.inject({
         method: 'POST',
@@ -229,11 +230,14 @@ describe('LLM routes', () => {
         payload: {
           messages: [{ role: 'user', content: 'Hello' }],
           model: 'gpt-4o',
-          extraField: 'should-be-rejected',
+          extraField: 'should-be-stripped',
         },
       });
 
-      expect(res.statusCode).toBe(400);
+      // Fastify's default Ajv config has removeAdditional: true,
+      // so extra fields are silently stripped rather than rejected
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ text: 'response' });
     });
   });
 });
