@@ -47,7 +47,9 @@ export class AnthropicLLMProvider implements ILLMProvider {
       throw new Error(`Anthropic API error: ${message}`);
     }
 
-    const textBlock = response.content.find((block) => block.type === 'text');
-    return textBlock && 'text' in textBlock ? textBlock.text : '';
+    return response.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('');
   }
 }

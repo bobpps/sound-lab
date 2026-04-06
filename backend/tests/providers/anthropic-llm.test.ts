@@ -144,6 +144,39 @@ describe('AnthropicLLMProvider', () => {
       expect(result).toBe('The answer is 42');
     });
 
+    it('concatenates all text blocks from the response', async () => {
+      mockCreate.mockResolvedValue({
+        content: [
+          { type: 'text', text: 'First part.' },
+          { type: 'text', text: ' Second part.' },
+        ],
+      });
+
+      const result = await provider.complete(
+        [{ role: 'user', content: 'Hello' }],
+        'claude-sonnet-4-5-20250929',
+      );
+
+      expect(result).toBe('First part. Second part.');
+    });
+
+    it('skips non-text blocks when concatenating', async () => {
+      mockCreate.mockResolvedValue({
+        content: [
+          { type: 'text', text: 'Before tool.' },
+          { type: 'tool_use', id: 'tool_1', name: 'get_weather', input: {} },
+          { type: 'text', text: ' After tool.' },
+        ],
+      });
+
+      const result = await provider.complete(
+        [{ role: 'user', content: 'Hello' }],
+        'claude-sonnet-4-5-20250929',
+      );
+
+      expect(result).toBe('Before tool. After tool.');
+    });
+
     it('returns empty string when response has no text blocks', async () => {
       mockCreate.mockResolvedValue({
         content: [],
