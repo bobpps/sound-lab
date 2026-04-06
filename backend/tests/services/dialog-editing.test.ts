@@ -1,5 +1,5 @@
 import type { IDatabase } from '../../src/db/interfaces.js';
-import type { DialogWithMessages } from '../../src/db/types.js';
+import type { DialogMessage, DialogWithMessages } from '../../src/db/types.js';
 import type { ILLMProvider } from '../../src/providers/llm/types.js';
 import { editDialog, DialogNotFoundError, LLMResponseError } from '../../src/services/dialog-editing.js';
 import { createDatabase } from '../../src/db/factory.js';
@@ -23,7 +23,7 @@ function makeLLMResponse(messages: { order: number; character: number; text: str
 
 function createMocks() {
   const getWithMessages = vi.fn<(id: number) => Promise<DialogWithMessages | null>>();
-  const updateMessage = vi.fn<(id: number, data: { text?: string }) => Promise<any>>();
+  const updateMessage = vi.fn<(id: number, data: { text?: string }) => Promise<DialogMessage>>();
 
   const db = {
     dialogs: { getWithMessages, updateMessage },
