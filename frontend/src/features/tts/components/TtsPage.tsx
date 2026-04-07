@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AnnotationEditor } from "./AnnotationEditor.tsx";
 import { AnnotationSelector } from "./AnnotationSelector.tsx";
 import { DialogSelector } from "./DialogSelector.tsx";
 import { ProviderSelector } from "./ProviderSelector.tsx";
@@ -59,6 +60,19 @@ export function TtsPage() {
           )}
         </div>
       </div>
+
+      {selectedAnnotationId !== null &&
+        selectedDialogId !== null &&
+        selectedProviderId !== null && (
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <AnnotationEditor
+              annotationId={selectedAnnotationId}
+              dialogId={selectedDialogId}
+              ttsProviderId={selectedProviderId}
+              onAnnotationCreated={handleAnnotationSelect}
+            />
+          </div>
+        )}
     </div>
   );
 }
