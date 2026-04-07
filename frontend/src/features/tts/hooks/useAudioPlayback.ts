@@ -49,13 +49,16 @@ export function useAudioPlayback({
 
   // Keep refs in sync so the playback chain always reads current values
   const providerIdRef = useRef(providerId);
-  providerIdRef.current = providerId;
   const messagesRef = useRef(messages);
-  messagesRef.current = messages;
   const voiceMapRef = useRef(voiceMap);
-  voiceMapRef.current = voiceMap;
   const synthesizeRef = useRef(synthesize);
-  synthesizeRef.current = synthesize;
+
+  useEffect(() => {
+    providerIdRef.current = providerId;
+    messagesRef.current = messages;
+    voiceMapRef.current = voiceMap;
+    synthesizeRef.current = synthesize;
+  });
 
   // Determine which characters are present in the messages
   const characters = new Set(messages.map((m) => m.character));
