@@ -11,6 +11,7 @@ const LIST_AGENTS_URL = `${API_BASE_URL}/v1/convai/agents`;
 const SIGNED_URL_PATH = '/v1/convai/conversation/get-signed-url';
 const PAGE_SIZE = 100;
 const SESSION_INIT_TIMEOUT_MS = 15_000;
+const SESSION_CLOSE_TIMEOUT_MS = 5_000;
 
 interface ElevenLabsAgentSummary {
   agent_id?: string;
@@ -123,6 +124,45 @@ async function sendJson(socket: WebSocket, message: Record<string, unknown>): Pr
   });
 }
 
+function closeSocket(socket: WebSocket, code: number, reason: string): void {
+  if (socket.readyState >= WebSocket.CLOSING) {
+    return;
+  }
+
+  socket.close(code, reason);
+}
+
+function waitForSocketClose(socket: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    let resolved = false;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = (): void => {
+      if (resolved) {
+        return;
+      }
+
+      resolved = true;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      resolve();
+    };
+
+    socket.once('close', () => {
+      finish();
+    });
+
+    timeoutHandle = setTimeout(() => {
+      if ('terminate' in socket && typeof socket.terminate === 'function') {
+        socket.terminate();
+      }
+
+      finish();
+    }, SESSION_CLOSE_TIMEOUT_MS);
+  });
+}
+
 function parseServerMessage(raw: unknown): ElevenLabsServerMessage | null {
   const payload = bufferToString(raw);
   if (!payload) {
@@ -169,13 +209,19 @@ function buildConversationInitiationMessage(
 
 class ElevenLabsRealtimeSession implements IRealtimeSession {
   private closePromise: Promise<void> | null = null;
+  private closed = false;
 
   constructor(
     private readonly socket: WebSocket,
     private readonly dispose: () => void,
+    private readonly suppressRemoteSessionEnd: () => void,
   ) {}
 
   async sendAudio(chunk: Buffer): Promise<void> {
+    if (this.closed || this.socket.readyState !== WebSocket.OPEN) {
+      throw new Error('ElevenLabs Realtime session is not open');
+    }
+
     await sendJson(this.socket, {
       user_audio_chunk: chunk.toString('base64'),
     });
@@ -186,32 +232,17 @@ class ElevenLabsRealtimeSession implements IRealtimeSession {
       return this.closePromise;
     }
 
+    this.closed = true;
+    this.suppressRemoteSessionEnd();
     this.dispose();
 
     if (this.socket.readyState === WebSocket.CLOSED) {
-      return;
+      this.closePromise = Promise.resolve();
+      return this.closePromise;
     }
 
-    this.closePromise = new Promise<void>((resolve) => {
-      const finish = () => {
-        this.socket.off('close', finish);
-        resolve();
-      };
-
-      this.socket.on('close', finish);
-
-      if (this.socket.readyState === WebSocket.OPEN) {
-        this.socket.close(1000, 'Sound Lab session closed');
-        return;
-      }
-
-      if (this.socket.readyState === WebSocket.CONNECTING) {
-        this.socket.close();
-        return;
-      }
-
-      finish();
-    });
+    this.closePromise = waitForSocketClose(this.socket);
+    closeSocket(this.socket, 1000, 'Sound Lab session closed');
 
     await this.closePromise;
   }
@@ -314,6 +345,7 @@ export class ElevenLabsRealtimeProvider implements IRealtimeProvider {
   ): Promise<IRealtimeSession> {
     const socket = new WebSocket(signedUrl);
     const pingTimers = new Set<NodeJS.Timeout>();
+    let suppressRemoteSessionEnd = false;
 
     const dispose = () => {
       for (const timer of pingTimers) {
@@ -321,6 +353,10 @@ export class ElevenLabsRealtimeProvider implements IRealtimeProvider {
       }
 
       pingTimers.clear();
+    };
+
+    const suppressSessionEnd = () => {
+      suppressRemoteSessionEnd = true;
     };
 
     return new Promise<IRealtimeSession>((resolve, reject) => {
@@ -372,7 +408,7 @@ export class ElevenLabsRealtimeProvider implements IRealtimeProvider {
             if (!ready) {
               ready = true;
               completeInit();
-              resolve(new ElevenLabsRealtimeSession(socket, dispose));
+              resolve(new ElevenLabsRealtimeSession(socket, dispose, suppressSessionEnd));
             }
 
             return;
@@ -509,10 +545,12 @@ export class ElevenLabsRealtimeProvider implements IRealtimeProvider {
           return;
         }
 
-        onEvent({
-          type: 'session_end',
-          data: { code, reason: reasonText || undefined },
-        });
+        if (!suppressRemoteSessionEnd) {
+          onEvent({
+            type: 'session_end',
+            data: { code, reason: reasonText || undefined },
+          });
+        }
       });
     });
   }

@@ -8,6 +8,8 @@ const { MockWebSocket, mockSockets } = vi.hoisted(() => {
     readonly sentMessages: string[] = [];
     readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
     readyState = MockWebSocket.CONNECTING;
+    autoEmitCloseOnClose = true;
+    terminated = false;
     closeCode?: number;
     closeReason?: string;
 
@@ -31,6 +33,15 @@ const { MockWebSocket, mockSockets } = vi.hoisted(() => {
       return this;
     }
 
+    once(event: string, listener: (...args: unknown[]) => void): this {
+      const wrapped = (...args: unknown[]) => {
+        this.off(event, wrapped);
+        listener(...args);
+      };
+
+      return this.on(event, wrapped);
+    }
+
     send(data: string, callback?: (error?: Error) => void): void {
       this.sentMessages.push(data);
       callback?.();
@@ -39,8 +50,21 @@ const { MockWebSocket, mockSockets } = vi.hoisted(() => {
     close(code = 1000, reason = ''): void {
       this.closeCode = code;
       this.closeReason = reason;
-      this.readyState = MockWebSocket.CLOSED;
+      this.readyState = this.autoEmitCloseOnClose
+        ? MockWebSocket.CLOSED
+        : MockWebSocket.CLOSING;
+
+      if (!this.autoEmitCloseOnClose) {
+        return;
+      }
+
       this.emit('close', code, Buffer.from(reason));
+    }
+
+    terminate(): void {
+      this.terminated = true;
+      this.readyState = MockWebSocket.CLOSED;
+      this.emit('close', this.closeCode ?? 1006, Buffer.from(this.closeReason ?? 'terminated'));
     }
 
     open(): void {
@@ -336,6 +360,56 @@ describe('ElevenLabsRealtimeProvider', () => {
     });
 
     await session.close();
+  });
+
+  it('terminates the socket if ElevenLabs never responds to the close handshake', async () => {
+    vi.useFakeTimers();
+
+    try {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          signed_url: 'wss://api.elevenlabs.io/v1/convai/conversation?agent_id=agent-stuck&token=abc',
+        }), { status: 200 }),
+      );
+
+      const events: RealtimeEvent[] = [];
+      const sessionPromise = provider.createSession(
+        {
+          model: 'agent-stuck',
+          systemPrompt: 'prompt',
+        },
+        (event) => {
+          events.push(event);
+        },
+      );
+
+      await vi.waitFor(() => {
+        expect(mockSockets).toHaveLength(1);
+      });
+
+      const socket = mockSockets[0];
+      socket.open();
+      socket.receive({
+        type: 'conversation_initiation_metadata',
+        conversation_initiation_metadata_event: {
+          conversation_id: 'conv-stuck',
+        },
+      });
+
+      const session = await sessionPromise;
+      socket.autoEmitCloseOnClose = false;
+
+      const closePromise = session.close();
+
+      expect(socket.readyState).toBe(MockWebSocket.CLOSING);
+      await vi.advanceTimersByTimeAsync(5_000);
+      await closePromise;
+
+      expect(socket.terminated).toBe(true);
+      expect(events).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('rejects when the websocket closes before session initialization completes', async () => {

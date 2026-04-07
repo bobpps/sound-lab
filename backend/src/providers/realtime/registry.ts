@@ -3,9 +3,7 @@ import { ElevenLabsRealtimeProvider } from './elevenlabs.js';
 
 export type RealtimeProviderConstructor = new (apiKey: string) => IRealtimeProvider;
 
-const PROVIDERS: Record<string, RealtimeProviderConstructor> = {
-  'elevenlabs-realtime': ElevenLabsRealtimeProvider,
-};
+const PROVIDERS: Record<string, RealtimeProviderConstructor> = {};
 
 export function createRealtimeProvider(providerId: string, apiKey: string): IRealtimeProvider {
   const Provider = PROVIDERS[providerId];
@@ -27,3 +25,5 @@ export function registerRealtimeProvider(
 export function getSupportedRealtimeProviders(): string[] {
   return Object.keys(PROVIDERS);
 }
+
+registerRealtimeProvider('elevenlabs-realtime', ElevenLabsRealtimeProvider);
