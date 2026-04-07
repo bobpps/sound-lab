@@ -10,6 +10,11 @@ import {
   useTtsVoices,
   useDialogs,
   useAnnotationsByDialog,
+  useAnnotation,
+  useDialogWithMessages,
+  useLlmProviders,
+  useLlmModels,
+  useAnnotationPrompts,
 } from "./queries.ts";
 
 const providers = [
@@ -60,6 +65,65 @@ const annotations = [
   },
 ];
 
+const annotationWithMessages = {
+  id: 10,
+  dialog_id: 1,
+  provider_id: "openai",
+  title: "Formal annotation",
+  created_by: null,
+  created_at: "2026-04-02T10:00:00.000Z",
+  messages: [
+    {
+      id: 100,
+      annotated_dialog_id: 10,
+      dialog_message_id: 1,
+      text: "Good morning, how may I help you?",
+    },
+  ],
+};
+
+const dialogWithMessages = {
+  id: 1,
+  title: "Greeting",
+  description: null,
+  language: "en-US",
+  created_by: null,
+  created_at: "2026-04-01T10:00:00.000Z",
+  messages: [
+    {
+      id: 1,
+      dialog_id: 1,
+      order: 1,
+      character: 1,
+      text: "Hello, how can I help you?",
+    },
+  ],
+};
+
+const llmProviders = [
+  {
+    id: "openai",
+    name: "OpenAI",
+    type: "llm",
+    enabled: true,
+    created_at: "2026-04-06T00:00:00.000Z",
+  },
+];
+
+const llmModels = ["gpt-4o", "gpt-4o-mini"];
+
+const annotationPrompts = [
+  {
+    id: 1,
+    title: "Formal style",
+    provider_id: "elevenlabs",
+    language: "en-US",
+    prompt: "Make it formal",
+    created_by: null,
+    created_at: "2026-04-03T00:00:00.000Z",
+  },
+];
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -94,6 +158,26 @@ describe("tts queries", () => {
 
         if (url.endsWith("/api/dialogs/1/annotations")) {
           return jsonResponse(annotations);
+        }
+
+        if (url.endsWith("/api/annotations/10")) {
+          return jsonResponse(annotationWithMessages);
+        }
+
+        if (url.endsWith("/api/dialogs/1")) {
+          return jsonResponse(dialogWithMessages);
+        }
+
+        if (url.endsWith("/api/providers?type=llm")) {
+          return jsonResponse(llmProviders);
+        }
+
+        if (url.endsWith("/api/llm/openai/models")) {
+          return jsonResponse(llmModels);
+        }
+
+        if (url.endsWith("/api/annotation-prompts")) {
+          return jsonResponse(annotationPrompts);
         }
 
         return jsonResponse({ message: "Not Found" }, 404);
@@ -197,6 +281,120 @@ describe("tts queries", () => {
     expect(result.current.fetchStatus).toBe("idle");
   });
 
+  it("fetches annotation with messages by id", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useAnnotation(10), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(annotationWithMessages);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/annotations/10",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("disables annotation query when annotationId is null", () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useAnnotation(null), { wrapper });
+
+    expect(result.current.fetchStatus).toBe("idle");
+  });
+
+  it("fetches dialog with messages by id", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useDialogWithMessages(1), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(dialogWithMessages);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/dialogs/1",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("disables dialog-with-messages query when dialogId is null", () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useDialogWithMessages(null), {
+      wrapper,
+    });
+
+    expect(result.current.fetchStatus).toBe("idle");
+  });
+
+  it("fetches LLM providers", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useLlmProviders(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(llmProviders);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/providers?type=llm",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("fetches models for an LLM provider", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useLlmModels("openai"), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(llmModels);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/llm/openai/models",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("disables models query when providerId is null", () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useLlmModels(null), { wrapper });
+
+    expect(result.current.fetchStatus).toBe("idle");
+  });
+
+  it("fetches annotation prompts", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useAnnotationPrompts(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(annotationPrompts);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/annotation-prompts",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("provides structured query keys via ttsKeys", () => {
     expect(ttsKeys.providers()).toEqual(["tts", "providers"]);
     expect(ttsKeys.voices("elevenlabs")).toEqual([
@@ -206,5 +404,18 @@ describe("tts queries", () => {
     ]);
     expect(ttsKeys.dialogs()).toEqual(["tts", "dialogs"]);
     expect(ttsKeys.annotations(1)).toEqual(["tts", "annotations", 1]);
+    expect(ttsKeys.annotation(10)).toEqual(["tts", "annotation", 10]);
+    expect(ttsKeys.dialogWithMessages(1)).toEqual([
+      "tts",
+      "dialogWithMessages",
+      1,
+    ]);
+    expect(ttsKeys.llmProviders()).toEqual(["tts", "llmProviders"]);
+    expect(ttsKeys.llmModels("openai")).toEqual([
+      "tts",
+      "llmModels",
+      "openai",
+    ]);
+    expect(ttsKeys.annotationPrompts()).toEqual(["tts", "annotationPrompts"]);
   });
 });

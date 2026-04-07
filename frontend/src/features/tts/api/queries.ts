@@ -1,8 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../lib/api-client.ts";
 import type {
   AnnotatedDialog,
+  AnnotatedDialogWithMessages,
+  AnnotatedMessage,
+  AnnotationPrompt,
   Dialog,
+  DialogWithMessages,
   Provider,
   Voice,
 } from "../../../types/api.ts";
@@ -12,6 +16,14 @@ export const ttsKeys = {
   voices: (providerId: string) => ["tts", "voices", providerId] as const,
   dialogs: () => ["tts", "dialogs"] as const,
   annotations: (dialogId: number) => ["tts", "annotations", dialogId] as const,
+  annotation: (annotationId: number) =>
+    ["tts", "annotation", annotationId] as const,
+  dialogWithMessages: (dialogId: number) =>
+    ["tts", "dialogWithMessages", dialogId] as const,
+  llmProviders: () => ["tts", "llmProviders"] as const,
+  llmModels: (providerId: string) =>
+    ["tts", "llmModels", providerId] as const,
+  annotationPrompts: () => ["tts", "annotationPrompts"] as const,
 };
 
 export function useTtsProviders() {
@@ -42,5 +54,44 @@ export function useAnnotationsByDialog(dialogId: number | null) {
     queryFn: () =>
       api.get<AnnotatedDialog[]>(`/dialogs/${dialogId}/annotations`),
     enabled: dialogId !== null,
+  });
+}
+
+export function useAnnotation(annotationId: number | null) {
+  return useQuery({
+    queryKey: ttsKeys.annotation(annotationId ?? 0),
+    queryFn: () =>
+      api.get<AnnotatedDialogWithMessages>(`/annotations/${annotationId}`),
+    enabled: annotationId !== null,
+  });
+}
+
+export function useDialogWithMessages(dialogId: number | null) {
+  return useQuery({
+    queryKey: ttsKeys.dialogWithMessages(dialogId ?? 0),
+    queryFn: () => api.get<DialogWithMessages>(`/dialogs/${dialogId}`),
+    enabled: dialogId !== null,
+  });
+}
+
+export function useLlmProviders() {
+  return useQuery({
+    queryKey: ttsKeys.llmProviders(),
+    queryFn: () => api.get<Provider[]>("/providers?type=llm"),
+  });
+}
+
+export function useLlmModels(providerId: string | null) {
+  return useQuery({
+    queryKey: ttsKeys.llmModels(providerId ?? ""),
+    queryFn: () => api.get<string[]>(`/llm/${providerId}/models`),
+    enabled: providerId !== null,
+  });
+}
+
+export function useAnnotationPrompts() {
+  return useQuery({
+    queryKey: ttsKeys.annotationPrompts(),
+    queryFn: () => api.get<AnnotationPrompt[]>("/annotation-prompts"),
   });
 }
