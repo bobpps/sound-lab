@@ -47,6 +47,16 @@ export function useAudioPlayback({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
 
+  // Keep refs in sync so the playback chain always reads current values
+  const providerIdRef = useRef(providerId);
+  providerIdRef.current = providerId;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const voiceMapRef = useRef(voiceMap);
+  voiceMapRef.current = voiceMap;
+  const synthesizeRef = useRef(synthesize);
+  synthesizeRef.current = synthesize;
+
   // Determine which characters are present in the messages
   const characters = new Set(messages.map((m) => m.character));
   const canPlay =
@@ -74,17 +84,22 @@ export function useAudioPlayback({
   }
 
   async function playMessage(index: number) {
-    if (index >= messages.length) {
+    const currentMessages = messagesRef.current;
+    const currentVoiceMap = voiceMapRef.current;
+    const currentProviderId = providerIdRef.current;
+    const currentSynthesize = synthesizeRef.current;
+
+    if (index >= currentMessages.length) {
       cleanup();
       setStatus("idle");
       setCurrentIndex(-1);
       return;
     }
 
-    const message = messages[index];
-    const voiceId = voiceMap[message.character];
+    const message = currentMessages[index];
+    const voiceId = currentVoiceMap[message.character];
 
-    if (!voiceId || !providerId) {
+    if (!voiceId || !currentProviderId) {
       cleanup();
       setStatus("error");
       setError("Missing voice assignment");
@@ -97,8 +112,8 @@ export function useAudioPlayback({
     try {
       setCurrentIndex(index);
 
-      const blob = await synthesize(
-        providerId,
+      const blob = await currentSynthesize(
+        currentProviderId,
         voiceId,
         message.text,
         controller.signal,
