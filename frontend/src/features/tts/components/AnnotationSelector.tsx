@@ -2,12 +2,14 @@ import { useAnnotationsByDialog } from "../api/queries.ts";
 
 interface AnnotationSelectorProps {
   dialogId: number;
+  providerId: string;
   selectedAnnotationId: number | null;
   onSelect: (annotationId: number | null) => void;
 }
 
 export function AnnotationSelector({
   dialogId,
+  providerId,
   selectedAnnotationId,
   onSelect,
 }: AnnotationSelectorProps) {
@@ -27,6 +29,10 @@ export function AnnotationSelector({
     );
   }
 
+  const providerAnnotations = annotationsQuery.data.filter(
+    (a) => a.provider_id === providerId,
+  );
+
   return (
     <div className="space-y-1">
       <label
@@ -45,7 +51,7 @@ export function AnnotationSelector({
         }}
       >
         <option value="clean">Clean (no annotation)</option>
-        {annotationsQuery.data.map((annotation) => (
+        {providerAnnotations.map((annotation) => (
           <option key={annotation.id} value={String(annotation.id)}>
             {annotation.title}
           </option>

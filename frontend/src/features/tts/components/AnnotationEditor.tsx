@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { api } from "../../../lib/api-client.ts";
 import type { AnnotatedMessage, DialogMessage } from "../../../types/api.ts";
 import {
   useAnnotation,
@@ -46,6 +47,13 @@ export function AnnotationEditor({
   const debounceTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
+  // Refs to access current values from effect cleanup (avoids stale closures)
+  const localTextsRef = useRef(localTexts);
+  localTextsRef.current = localTexts;
+  const annotationQueryRef = useRef(annotationQuery.data);
+  annotationQueryRef.current = annotationQuery.data;
+  const updateMessageRef = useRef(updateMessage.mutate);
+  updateMessageRef.current = updateMessage.mutate;
 
   // Derive pairs from query data + local text overrides (no useEffect hydration)
   const annotatedMap = new Map(
@@ -64,15 +72,47 @@ export function AnnotationEditor({
     },
   );
 
-  // Clear local edits and debounce timers when annotation changes or on unmount
+  // Flush all pending debounced saves immediately (fire mutations now, cancel timers)
+  function flushPendingSaves() {
+    const timers = debounceTimers.current;
+    for (const [dialogMessageId, timer] of timers.entries()) {
+      clearTimeout(timer);
+      const text = localTexts.get(dialogMessageId);
+      const annotatedMsg = annotationQuery.data?.messages.find(
+        (m) => m.dialog_message_id === dialogMessageId,
+      );
+      if (text !== undefined && annotatedMsg) {
+        updateMessage.mutate({
+          annotationId,
+          messageId: annotatedMsg.id,
+          data: { text },
+        });
+      }
+    }
+    timers.clear();
+  }
+
+  // Flush pending saves, then reset local state when annotation changes or on unmount
   useEffect(() => {
     setLocalTexts(new Map());
     setError(null);
     const timers = debounceTimers.current;
 
     return () => {
-      for (const timer of timers.values()) {
+      // Flush pending saves before discarding timers
+      for (const [dialogMessageId, timer] of timers.entries()) {
         clearTimeout(timer);
+        const text = localTextsRef.current.get(dialogMessageId);
+        const annotatedMsg = annotationQueryRef.current?.messages.find(
+          (m: AnnotatedMessage) => m.dialog_message_id === dialogMessageId,
+        );
+        if (text !== undefined && annotatedMsg) {
+          updateMessageRef.current({
+            annotationId,
+            messageId: annotatedMsg.id,
+            data: { text },
+          });
+        }
       }
       timers.clear();
     };
@@ -123,8 +163,11 @@ export function AnnotationEditor({
   }
 
   async function handleSaveAsNewVariant() {
+    flushPendingSaves();
     setError(null);
     setSavingVariant(true);
+
+    let newAnnotationId: number | null = null;
 
     try {
       // Step 1: Create annotation shell
@@ -135,6 +178,7 @@ export function AnnotationEditor({
           title: `${annotationQuery.data?.title ?? "Annotation"} (copy)`,
         },
       });
+      newAnnotationId = newAnnotation.id;
 
       // Step 2: Create messages for each pair
       for (const pair of pairs) {
@@ -149,6 +193,14 @@ export function AnnotationEditor({
 
       onAnnotationCreated?.(newAnnotation.id);
     } catch (err) {
+      // Rollback: delete the partially created annotation
+      if (newAnnotationId !== null) {
+        try {
+          await api.delete(`/annotations/${newAnnotationId}`);
+        } catch {
+          // Rollback failed — leave it for manual cleanup
+        }
+      }
       setError(
         err instanceof Error ? err.message : "Failed to save new variant.",
       );
