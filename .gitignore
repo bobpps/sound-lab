@@ -4,5 +4,6 @@ dist/
 .env.local
 *.log
 data/
+.playwright-mcp/
 .claude/settings.local.json
 .claude/worktrees/

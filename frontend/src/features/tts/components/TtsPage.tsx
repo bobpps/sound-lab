@@ -2,20 +2,16 @@ import { useState } from "react";
 import clsx from "clsx";
 import { api } from "../../../lib/api-client.ts";
 import type { AnnotatedMessage, DialogMessage } from "../../../types/api.ts";
-import {
-  useAnnotation,
-  useAnnotations,
-  useDialogDetail,
-  useDialogList,
-  useProviderList,
-  useTtsVoices,
-} from "../api/queries.ts";
+import { useAnnotation, useDialogDetail, useTtsVoices } from "../api/queries.ts";
 import {
   useAudioPlayback,
   type PlaybackMessage,
   type VoiceMap,
 } from "../hooks/useAudioPlayback.ts";
+import { AnnotationSelector } from "./AnnotationSelector.tsx";
+import { DialogSelector } from "./DialogSelector.tsx";
 import { PlaybackControls } from "./PlaybackControls.tsx";
+import { ProviderSelector } from "./ProviderSelector.tsx";
 import { VoiceAssignment } from "./VoiceAssignment.tsx";
 
 async function synthesize(
@@ -71,28 +67,22 @@ function buildOriginalPlaybackMessages(
 }
 
 export function TtsPage() {
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
+    null,
+  );
   const [selectedDialogId, setSelectedDialogId] = useState<number | null>(null);
-  const [selectedAnnotationId, setSelectedAnnotationId] = useState<number | "original" | null>(null);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<
+    number | null
+  >(null);
   const [voiceMap, setVoiceMap] = useState<VoiceMap>({});
 
-  const providersQuery = useProviderList();
-  const dialogsQuery = useDialogList();
+  // Queries for voice assignment + playback
   const voicesQuery = useTtsVoices(selectedProviderId);
-  const annotationsQuery = useAnnotations(selectedDialogId);
-  const annotationQuery = useAnnotation(
-    typeof selectedAnnotationId === "number" ? selectedAnnotationId : null,
-  );
+  const annotationQuery = useAnnotation(selectedAnnotationId);
   const dialogDetailQuery = useDialogDetail(selectedDialogId);
 
-  const enabledProviders = providersQuery.data?.filter((p) => p.enabled);
-
-  const filteredAnnotations = annotationsQuery.data?.filter(
-    (a) => a.provider_id === selectedProviderId,
-  );
-
-  // "original" means no annotation selected — use raw dialog messages
-  const useOriginal = selectedAnnotationId === "original";
+  // null annotationId means "clean/no annotation" — use original dialog messages
+  const useOriginal = selectedAnnotationId === null && selectedDialogId !== null;
 
   const playbackMessages: PlaybackMessage[] =
     useOriginal && dialogDetailQuery.data?.messages
@@ -111,110 +101,69 @@ export function TtsPage() {
     synthesize,
   });
 
-  function handleProviderChange(value: string) {
-    setSelectedProviderId(value || null);
+  function handleProviderSelect(providerId: string) {
+    setSelectedProviderId(providerId);
     setSelectedDialogId(null);
     setSelectedAnnotationId(null);
     setVoiceMap({});
     playback.stop();
   }
 
-  function handleDialogChange(value: string) {
-    const id = Number(value);
-    setSelectedDialogId(Number.isNaN(id) ? null : id);
+  function handleDialogSelect(dialogId: number) {
+    setSelectedDialogId(dialogId);
     setSelectedAnnotationId(null);
     playback.stop();
   }
 
-  function handleAnnotationChange(value: string) {
-    if (value === "original") {
-      setSelectedAnnotationId("original");
-    } else {
-      const id = Number(value);
-      setSelectedAnnotationId(Number.isNaN(id) ? null : id);
-    }
+  function handleAnnotationSelect(annotationId: number | null) {
+    setSelectedAnnotationId(annotationId);
     playback.stop();
   }
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="space-y-2">
         <h1 className="text-2xl font-bold text-gray-900">TTS Testing</h1>
-        <p className="mt-2 text-gray-600">
+        <p className="max-w-2xl text-sm text-gray-600">
           Test text-to-speech providers and compare outputs.
         </p>
       </div>
 
-      {/* Selectors */}
+      {/* Selectors — from PR #59 components */}
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Configuration</h2>
+        <div className="grid gap-6 md:grid-cols-3">
+          <ProviderSelector
+            selectedId={selectedProviderId}
+            onSelect={handleProviderSelect}
+          />
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <label className="flex flex-col gap-1 text-sm text-gray-600">
-            Provider
-            <select
-              aria-label="Provider"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              value={selectedProviderId ?? ""}
-              onChange={(e) => handleProviderChange(e.target.value)}
-            >
-              <option value="">Select a provider...</option>
-              {enabledProviders?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {selectedProviderId !== null && (
+            <DialogSelector
+              selectedId={selectedDialogId}
+              onSelect={handleDialogSelect}
+            />
+          )}
 
-          <label className="flex flex-col gap-1 text-sm text-gray-600">
-            Dialog
-            <select
-              aria-label="Dialog"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              value={selectedDialogId ?? ""}
-              onChange={(e) => handleDialogChange(e.target.value)}
-              disabled={!selectedProviderId}
-            >
-              <option value="">Select a dialog...</option>
-              {dialogsQuery.data?.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.title}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm text-gray-600">
-            Annotation
-            <select
-              aria-label="Annotation"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              value={selectedAnnotationId ?? ""}
-              onChange={(e) => handleAnnotationChange(e.target.value)}
-              disabled={!selectedDialogId}
-            >
-              <option value="">Select an annotation...</option>
-              <option value="original">Original (no annotation)</option>
-              {filteredAnnotations?.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.title}
-                </option>
-              ))}
-            </select>
-          </label>
+          {selectedProviderId !== null && selectedDialogId !== null && (
+            <AnnotationSelector
+              dialogId={selectedDialogId}
+              providerId={selectedProviderId}
+              selectedAnnotationId={selectedAnnotationId}
+              onSelect={handleAnnotationSelect}
+            />
+          )}
         </div>
       </div>
 
-      {/* Voice Assignment -- shown when provider + annotation/original are selected */}
-      {selectedProviderId && selectedAnnotationId !== null && (
+      {/* Voice Assignment — shown after provider + dialog selected */}
+      {selectedProviderId && selectedDialogId !== null && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900">
             Voice Assignment
           </h2>
           <div className="mt-4">
             {voicesQuery.isPending ? (
-              <p className="text-sm text-gray-600">Loading voices...</p>
+              <p className="text-sm text-gray-500">Loading voices...</p>
             ) : voicesQuery.isError ? (
               <p className="text-sm text-red-600">Failed to load voices.</p>
             ) : (
@@ -229,7 +178,7 @@ export function TtsPage() {
         </div>
       )}
 
-      {/* Messages + Playback -- shown when messages are available */}
+      {/* Messages + Playback */}
       {playbackMessages.length > 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

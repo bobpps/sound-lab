@@ -5,51 +5,80 @@ import {
   createTestWrapper,
 } from "../../../test-utils.tsx";
 import {
+  ttsKeys,
+  useTtsProviders,
   useTtsVoices,
-  useAnnotations,
+  useDialogs,
+  useAnnotationsByDialog,
   useAnnotation,
-  useProviderList,
-  useDialogList,
   useDialogDetail,
-  ttsVoiceKeys,
 } from "./queries.ts";
+
+const providers = [
+  {
+    id: "elevenlabs",
+    name: "ElevenLabs",
+    type: "tts",
+    enabled: true,
+    created_at: "2026-04-06T00:00:00.000Z",
+  },
+  {
+    id: "google",
+    name: "Google",
+    type: "tts",
+    enabled: false,
+    created_at: "2026-04-06T00:00:00.000Z",
+  },
+];
 
 const voices = [
   {
     id: "voice-1",
-    name: "Alice",
+    name: "Rachel",
     language: "en-US",
     gender: "female",
   },
+];
+
+const dialogs = [
   {
-    id: "voice-2",
-    name: "Bob",
+    id: 1,
+    title: "Greeting",
+    description: null,
     language: "en-US",
-    gender: "male",
+    created_by: null,
+    created_at: "2026-04-01T10:00:00.000Z",
   },
 ];
 
 const annotations = [
   {
-    id: 1,
-    dialog_id: 10,
-    provider_id: "google",
-    title: "Narration v1",
+    id: 10,
+    dialog_id: 1,
+    provider_id: "openai",
+    title: "Formal annotation",
     created_by: null,
-    created_at: "2026-04-03T10:00:00.000Z",
+    created_at: "2026-04-02T10:00:00.000Z",
   },
 ];
 
 const annotationWithMessages = {
-  id: 1,
-  dialog_id: 10,
-  provider_id: "google",
-  title: "Narration v1",
+  id: 10,
+  dialog_id: 1,
+  provider_id: "openai",
+  title: "Formal annotation",
   created_by: null,
-  created_at: "2026-04-03T10:00:00.000Z",
+  created_at: "2026-04-02T10:00:00.000Z",
   messages: [
-    { id: 100, annotated_dialog_id: 1, dialog_message_id: 50, text: "Hello there." },
-    { id: 101, annotated_dialog_id: 1, dialog_message_id: 51, text: "Hi, how are you?" },
+    { id: 100, annotated_dialog_id: 10, dialog_message_id: 50, text: "Hello there." },
+    { id: 101, annotated_dialog_id: 10, dialog_message_id: 51, text: "Hi, how are you?" },
+  ],
+};
+
+const dialogWithMessages = {
+  ...dialogs[0],
+  messages: [
+    { id: 50, dialog_id: 1, order: 1, character: 1 as const, text: "Hello." },
   ],
 };
 
@@ -62,7 +91,7 @@ function jsonResponse(body: unknown, status = 200) {
 
 function extractUrl(input: string | URL | Request): string {
   if (typeof input === "string") return input;
-  if (input instanceof URL) return input.pathname + input.search;
+  if (input instanceof URL) return input.pathname;
   return input.url;
 }
 
@@ -73,37 +102,28 @@ describe("tts queries", () => {
       vi.fn(async (input: string | URL | Request) => {
         const url = extractUrl(input);
 
-        if (url === "/api/tts/google/voices") {
+        if (url.endsWith("/api/providers?type=tts")) {
+          return jsonResponse(providers);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/voices")) {
           return jsonResponse(voices);
         }
 
-        if (url === "/api/dialogs/10/annotations") {
+        if (url.endsWith("/api/dialogs")) {
+          return jsonResponse(dialogs);
+        }
+
+        if (url.endsWith("/api/dialogs/1/annotations")) {
           return jsonResponse(annotations);
         }
 
-        if (url === "/api/annotations/1") {
+        if (url.endsWith("/api/annotations/10")) {
           return jsonResponse(annotationWithMessages);
         }
 
-        if (url === "/api/providers?type=tts") {
-          return jsonResponse([
-            { id: "google", name: "Google", type: "tts", enabled: true, created_at: "2026-04-03T09:00:00.000Z" },
-          ]);
-        }
-
-        if (url === "/api/dialogs") {
-          return jsonResponse([
-            { id: 10, title: "Test dialog", description: null, language: "en-US", created_by: null, created_at: "2026-04-03T10:00:00.000Z" },
-          ]);
-        }
-
-        if (url === "/api/dialogs/10") {
-          return jsonResponse({
-            id: 10, title: "Test dialog", description: null, language: "en-US", created_by: null, created_at: "2026-04-03T10:00:00.000Z",
-            messages: [
-              { id: 50, dialog_id: 10, order: 1, character: 1, text: "Hello." },
-            ],
-          });
+        if (url.endsWith("/api/dialogs/1") && !url.includes("annotations")) {
+          return jsonResponse(dialogWithMessages);
         }
 
         return jsonResponse({ message: "Not Found" }, 404);
@@ -115,35 +135,75 @@ describe("tts queries", () => {
     vi.unstubAllGlobals();
   });
 
-  it("fetches voices for a TTS provider", async () => {
+  it("fetches TTS providers", async () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
-    const { result } = renderHook(() => useTtsVoices("google"), { wrapper });
+    const { result } = renderHook(() => useTtsProviders(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(providers);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/providers?type=tts",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("fetches voices for a provider", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useTtsVoices("elevenlabs"), {
+      wrapper,
+    });
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);
     });
 
     expect(result.current.data).toEqual(voices);
-    expect(queryClient.getQueryData(ttsVoiceKeys.list("google"))).toEqual(voices);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/tts/elevenlabs/voices",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
-  it("does not fetch voices when providerId is null", async () => {
+  it("disables voices query when providerId is null", () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
     const { result } = renderHook(() => useTtsVoices(null), { wrapper });
 
-    expect(result.current.isFetching).toBe(false);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe("idle");
+  });
+
+  it("fetches dialogs", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useDialogs(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(dialogs);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/dialogs",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
   it("fetches annotations for a dialog", async () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
-    const { result } = renderHook(() => useAnnotations(10), { wrapper });
+    const { result } = renderHook(() => useAnnotationsByDialog(1), {
+      wrapper,
+    });
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);
@@ -151,25 +211,40 @@ describe("tts queries", () => {
 
     expect(result.current.data).toEqual(annotations);
     expect(fetch).toHaveBeenCalledWith(
-      "/api/dialogs/10/annotations",
+      "/api/dialogs/1/annotations",
       expect.objectContaining({ method: "GET" }),
     );
   });
 
-  it("does not fetch annotations when dialogId is null", async () => {
+  it("disables annotations query when dialogId is null", () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
-    const { result } = renderHook(() => useAnnotations(null), { wrapper });
+    const { result } = renderHook(() => useAnnotationsByDialog(null), {
+      wrapper,
+    });
 
-    expect(result.current.isFetching).toBe(false);
+    expect(result.current.fetchStatus).toBe("idle");
   });
 
-  it("fetches an annotation with messages", async () => {
+  it("provides structured query keys via ttsKeys", () => {
+    expect(ttsKeys.providers()).toEqual(["tts", "providers"]);
+    expect(ttsKeys.voices("elevenlabs")).toEqual([
+      "tts",
+      "voices",
+      "elevenlabs",
+    ]);
+    expect(ttsKeys.dialogs()).toEqual(["tts", "dialogs"]);
+    expect(ttsKeys.annotations(1)).toEqual(["tts", "annotations", 1]);
+    expect(ttsKeys.annotation(10)).toEqual(["tts", "annotation", 10]);
+    expect(ttsKeys.dialogDetail(1)).toEqual(["tts", "dialog-detail", 1]);
+  });
+
+  it("fetches a single annotation with messages", async () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
-    const { result } = renderHook(() => useAnnotation(1), { wrapper });
+    const { result } = renderHook(() => useAnnotation(10), { wrapper });
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);
@@ -179,48 +254,20 @@ describe("tts queries", () => {
     expect(result.current.data?.messages).toHaveLength(2);
   });
 
-  it("does not fetch annotation when annotationId is null", async () => {
+  it("disables annotation query when annotationId is null", () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
     const { result } = renderHook(() => useAnnotation(null), { wrapper });
 
-    expect(result.current.isFetching).toBe(false);
-  });
-
-  it("fetches TTS providers", async () => {
-    const queryClient = createTestQueryClient();
-    const wrapper = createTestWrapper({ queryClient });
-
-    const { result } = renderHook(() => useProviderList(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
-    });
-
-    expect(result.current.data).toHaveLength(1);
-    expect(result.current.data?.[0].id).toBe("google");
-  });
-
-  it("fetches dialog list", async () => {
-    const queryClient = createTestQueryClient();
-    const wrapper = createTestWrapper({ queryClient });
-
-    const { result } = renderHook(() => useDialogList(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
-    });
-
-    expect(result.current.data).toHaveLength(1);
-    expect(result.current.data?.[0].title).toBe("Test dialog");
+    expect(result.current.fetchStatus).toBe("idle");
   });
 
   it("fetches dialog detail with messages", async () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
-    const { result } = renderHook(() => useDialogDetail(10), { wrapper });
+    const { result } = renderHook(() => useDialogDetail(1), { wrapper });
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);
@@ -229,12 +276,12 @@ describe("tts queries", () => {
     expect(result.current.data?.messages).toHaveLength(1);
   });
 
-  it("does not fetch dialog detail when dialogId is null", async () => {
+  it("disables dialog detail query when dialogId is null", () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
     const { result } = renderHook(() => useDialogDetail(null), { wrapper });
 
-    expect(result.current.isFetching).toBe(false);
+    expect(result.current.fetchStatus).toBe("idle");
   });
 });

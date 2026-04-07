@@ -4,34 +4,51 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "../../../test-utils.tsx";
 import { TtsPage } from "./TtsPage.tsx";
 
-const ttsProviders = [
-  { id: "google", name: "Google", type: "tts" as const, enabled: true, created_at: "2026-04-03T09:00:00.000Z" },
-  { id: "elevenlabs", name: "ElevenLabs", type: "tts" as const, enabled: true, created_at: "2026-04-03T09:00:00.000Z" },
-  { id: "disabled-provider", name: "Disabled TTS", type: "tts" as const, enabled: false, created_at: "2026-04-03T09:00:00.000Z" },
+const providers = [
+  {
+    id: "elevenlabs",
+    name: "ElevenLabs",
+    type: "tts",
+    enabled: true,
+    created_at: "2026-04-06T00:00:00.000Z",
+  },
 ];
 
 const dialogs = [
-  { id: 10, title: "Greeting dialog", description: null, language: "en-US", created_by: null, created_at: "2026-04-03T10:00:00.000Z" },
+  {
+    id: 1,
+    title: "Greeting practice",
+    description: null,
+    language: "en-US",
+    created_by: null,
+    created_at: "2026-04-01T10:00:00.000Z",
+  },
 ];
 
 const annotations = [
-  { id: 1, dialog_id: 10, provider_id: "google", title: "Narration v1", created_by: null, created_at: "2026-04-03T10:00:00.000Z" },
-  { id: 2, dialog_id: 10, provider_id: "elevenlabs", title: "EL annotation", created_by: null, created_at: "2026-04-03T10:00:00.000Z" },
+  {
+    id: 10,
+    dialog_id: 1,
+    provider_id: "elevenlabs",
+    title: "Formal annotation",
+    created_by: null,
+    created_at: "2026-04-02T10:00:00.000Z",
+  },
 ];
 
 const annotationWithMessages = {
   ...annotations[0],
   messages: [
-    { id: 100, annotated_dialog_id: 1, dialog_message_id: 50, text: "Hello there." },
-    { id: 101, annotated_dialog_id: 1, dialog_message_id: 51, text: "Hi, how are you?" },
+    { id: 100, annotated_dialog_id: 10, dialog_message_id: 50, text: "Hello there." },
+    { id: 101, annotated_dialog_id: 10, dialog_message_id: 51, text: "Hi, how are you?" },
   ],
 };
 
 const dialogWithMessages = {
   ...dialogs[0],
   messages: [
-    { id: 50, dialog_id: 10, order: 1, character: 1 as const, text: "Hello there." },
-    { id: 51, dialog_id: 10, order: 2, character: 2 as const, text: "Hi, how are you?" },
+    { id: 50, dialog_id: 1, order: 1, character: 1 as const, text: "Hello there." },
+    { id: 51, dialog_id: 1, order: 2, character: 2 as const, text: "Hi, how are you?" },
   ],
 };
 
@@ -49,238 +66,320 @@ function jsonResponse(body: unknown, status = 200) {
 
 function extractUrl(input: string | URL | Request): string {
   if (typeof input === "string") return input;
-  if (input instanceof URL) return input.pathname + input.search;
+  if (input instanceof URL) return input.pathname;
   return input.url;
 }
 
-beforeEach(() => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: string | URL | Request) => {
-      const url = extractUrl(input);
-
-      if (url === "/api/providers?type=tts") return jsonResponse(ttsProviders);
-      if (url === "/api/dialogs") return jsonResponse(dialogs);
-      if (url === "/api/dialogs/10/annotations") return jsonResponse(annotations);
-      if (url === "/api/annotations/1") return jsonResponse(annotationWithMessages);
-      if (url === "/api/dialogs/10") return jsonResponse(dialogWithMessages);
-      if (url === "/api/tts/google/voices") return jsonResponse(voices);
-      if (url === "/api/tts/elevenlabs/voices") return jsonResponse(voices);
-
-      return jsonResponse({ message: "Not Found" }, 404);
-    }),
-  );
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("TtsPage", () => {
-  it("renders the page title and description", async () => {
-    renderWithProviders(<TtsPage />);
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = extractUrl(input);
 
-    expect(screen.getByRole("heading", { name: /tts testing/i })).toBeInTheDocument();
-    expect(screen.getByText(/test text-to-speech/i)).toBeInTheDocument();
+        if (url.endsWith("/api/providers?type=tts")) {
+          return jsonResponse(providers);
+        }
+
+        if (url.endsWith("/api/dialogs")) {
+          return jsonResponse(dialogs);
+        }
+
+        if (url.endsWith("/api/dialogs/1/annotations")) {
+          return jsonResponse(annotations);
+        }
+
+        if (url.endsWith("/api/annotations/10")) {
+          return jsonResponse(annotationWithMessages);
+        }
+
+        if (url.endsWith("/api/dialogs/1") && !url.includes("annotations")) {
+          return jsonResponse(dialogWithMessages);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/voices")) {
+          return jsonResponse(voices);
+        }
+
+        return jsonResponse({ message: "Not Found" }, 404);
+      }),
+    );
   });
 
-  it("loads and shows TTS provider options", async () => {
-    renderWithProviders(<TtsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/provider/i)).toBeInTheDocument();
-    });
-
-    const providerSelect = screen.getByLabelText(/provider/i);
-    expect(providerSelect).toBeInTheDocument();
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it("shows dialog dropdown after provider is selected", async () => {
+  it("renders the page title", async () => {
+    renderWithProviders(<TtsPage />);
+
+    expect(
+      screen.getByRole("heading", { name: "TTS Testing" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows only provider selector initially, dialog and annotation are hidden", async () => {
+    renderWithProviders(<TtsPage />);
+
+    expect(
+      await screen.findByRole("combobox", { name: "TTS Provider" }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("combobox", { name: "Dialog" }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("combobox", { name: "Annotation Variant" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows dialog selector after selecting a provider", async () => {
     const user = userEvent.setup();
+
     renderWithProviders(<TtsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
     });
+    await user.selectOptions(providerSelect, "elevenlabs");
 
-    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
+    expect(
+      await screen.findByRole("combobox", { name: "Dialog" }),
+    ).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(screen.getByLabelText(/dialog/i)).toBeInTheDocument();
-    });
+    expect(
+      screen.queryByRole("combobox", { name: "Annotation Variant" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("shows annotation dropdown after dialog is selected", async () => {
+  it("shows annotation selector after selecting a dialog", async () => {
     const user = userEvent.setup();
+
     renderWithProviders(<TtsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
     });
+    await user.selectOptions(providerSelect, "elevenlabs");
 
-    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Greeting dialog" })).toBeInTheDocument();
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
     });
+    await user.selectOptions(dialogSelect, "1");
 
-    await user.selectOptions(screen.getByLabelText(/dialog/i), "10");
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/annotation/i)).toBeInTheDocument();
-    });
-  });
-
-  it("shows voice assignment and messages after annotation is selected", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<TtsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
-    });
-
-    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Greeting dialog" })).toBeInTheDocument();
-    });
-
-    await user.selectOptions(screen.getByLabelText(/dialog/i), "10");
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Narration v1" })).toBeInTheDocument();
-    });
-
-    await user.selectOptions(screen.getByLabelText(/annotation/i), "1");
-
-    await waitFor(() => {
-      expect(screen.getByText("Hello there.")).toBeInTheDocument();
-      expect(screen.getByText("Hi, how are you?")).toBeInTheDocument();
-    });
-
-    expect(screen.getByLabelText("Character 1 voice")).toBeInTheDocument();
-    expect(screen.getByLabelText("Character 2 voice")).toBeInTheDocument();
-  });
-
-  it("shows Run button disabled until voices are assigned", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<TtsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
-    });
-
-    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Greeting dialog" })).toBeInTheDocument();
-    });
-
-    await user.selectOptions(screen.getByLabelText(/dialog/i), "10");
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Narration v1" })).toBeInTheDocument();
-    });
-
-    await user.selectOptions(screen.getByLabelText(/annotation/i), "1");
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /run/i })).toBeInTheDocument();
-    });
-
-    expect(screen.getByRole("button", { name: /run/i })).toBeDisabled();
-  });
-
-  it("does not show disabled providers", async () => {
-    renderWithProviders(<TtsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
-    });
-
-    expect(screen.queryByRole("option", { name: "Disabled TTS" })).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("combobox", { name: "Annotation Variant" }),
+    ).toBeInTheDocument();
   });
 
   it("resets dialog and annotation when provider changes", async () => {
     const user = userEvent.setup();
+
+    // Add a second provider to enable switching
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = extractUrl(input);
+
+        if (url.endsWith("/api/providers?type=tts")) {
+          return jsonResponse([
+            ...providers,
+            {
+              id: "google",
+              name: "Google",
+              type: "tts",
+              enabled: true,
+              created_at: "2026-04-06T00:00:00.000Z",
+            },
+          ]);
+        }
+
+        if (url.endsWith("/api/dialogs")) {
+          return jsonResponse(dialogs);
+        }
+
+        if (url.endsWith("/api/dialogs/1/annotations")) {
+          return jsonResponse(annotations);
+        }
+
+        return jsonResponse({ message: "Not Found" }, 404);
+      }),
+    );
+
     renderWithProviders(<TtsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
+    // Select provider and dialog
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
     });
+    await user.selectOptions(providerSelect, "elevenlabs");
 
-    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Greeting dialog" })).toBeInTheDocument();
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
     });
+    await user.selectOptions(dialogSelect, "1");
 
-    await user.selectOptions(screen.getByLabelText(/dialog/i), "10");
+    // Verify annotation selector appeared
+    expect(
+      await screen.findByRole("combobox", { name: "Annotation Variant" }),
+    ).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Narration v1" })).toBeInTheDocument();
-    });
+    // Change provider — should reset dialog and annotation
+    await user.selectOptions(providerSelect, "google");
 
-    // Switch provider — dialog and annotation should reset
-    await user.selectOptions(screen.getByLabelText(/provider/i), "elevenlabs");
-
-    expect(screen.getByLabelText(/dialog/i)).toHaveValue("");
-    expect(screen.getByLabelText(/annotation/i)).toHaveValue("");
+    // Dialog selector should still be visible (new provider selected)
+    // but annotation selector should be gone (dialog was reset)
+    expect(
+      screen.getByRole("combobox", { name: "Dialog" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "Annotation Variant" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("filters annotations by selected provider", async () => {
+  it("resets annotation when dialog changes", async () => {
     const user = userEvent.setup();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = extractUrl(input);
+
+        if (url.endsWith("/api/providers?type=tts")) {
+          return jsonResponse(providers);
+        }
+
+        if (url.endsWith("/api/dialogs")) {
+          return jsonResponse([
+            ...dialogs,
+            {
+              id: 2,
+              title: "Second dialog",
+              description: null,
+              language: "en-GB",
+              created_by: null,
+              created_at: "2026-04-03T10:00:00.000Z",
+            },
+          ]);
+        }
+
+        if (url.includes("/annotations")) {
+          return jsonResponse(annotations);
+        }
+
+        return jsonResponse({ message: "Not Found" }, 404);
+      }),
+    );
+
     renderWithProviders(<TtsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
     });
+    await user.selectOptions(providerSelect, "elevenlabs");
 
-    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Greeting dialog" })).toBeInTheDocument();
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
     });
+    await user.selectOptions(dialogSelect, "1");
 
-    await user.selectOptions(screen.getByLabelText(/dialog/i), "10");
+    // Wait for annotation selector to appear
+    await screen.findByRole("combobox", { name: "Annotation Variant" });
 
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Narration v1" })).toBeInTheDocument();
+    // Select an annotation
+    const annotationSelect = screen.getByRole("combobox", {
+      name: "Annotation Variant",
     });
+    await user.selectOptions(annotationSelect, "10");
 
-    // Google is selected — should see Google annotation but not ElevenLabs annotation
-    expect(screen.getByRole("option", { name: "Narration v1" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "EL annotation" })).not.toBeInTheDocument();
+    // Change dialog — annotation selector should reset
+    await user.selectOptions(dialogSelect, "2");
+
+    // Annotation selector should still be visible but reset to "Clean"
+    const newAnnotationSelect = await screen.findByRole("combobox", {
+      name: "Annotation Variant",
+    });
+    expect(newAnnotationSelect).toHaveValue("clean");
   });
 
-  it("shows original dialog lines when 'Original' is selected", async () => {
+  it("shows voice assignment after selecting provider and dialog", async () => {
     const user = userEvent.setup();
+
     renderWithProviders(<TtsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
     });
+    await user.selectOptions(providerSelect, "elevenlabs");
 
-    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
-
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Greeting dialog" })).toBeInTheDocument();
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
     });
+    await user.selectOptions(dialogSelect, "1");
 
-    await user.selectOptions(screen.getByLabelText(/dialog/i), "10");
+    // Voice assignment should appear (voices load for the selected provider)
+    expect(
+      await screen.findByLabelText("Character 1 voice"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Character 2 voice")).toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: /original/i })).toBeInTheDocument();
+  it("shows dialog lines and Run button with clean (no annotation) selection", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<TtsPage />);
+
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
     });
+    await user.selectOptions(providerSelect, "elevenlabs");
 
-    await user.selectOptions(screen.getByLabelText(/annotation/i), "original");
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
+    });
+    await user.selectOptions(dialogSelect, "1");
 
+    // Default is "Clean (no annotation)" — original dialog messages should show
     await waitFor(() => {
       expect(screen.getByText("Hello there.")).toBeInTheDocument();
       expect(screen.getByText("Hi, how are you?")).toBeInTheDocument();
     });
 
-    // Voice assignment should also be visible
-    expect(screen.getByLabelText("Character 1 voice")).toBeInTheDocument();
+    // Run button should be present but disabled (no voices assigned)
+    expect(
+      screen.getByRole("button", { name: /run/i }),
+    ).toBeDisabled();
+  });
+
+  it("shows Run button disabled until voices are assigned", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<TtsPage />);
+
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
+    });
+    await user.selectOptions(providerSelect, "elevenlabs");
+
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
+    });
+    await user.selectOptions(dialogSelect, "1");
+
+    // Select a specific annotation
+    const annotationSelect = await screen.findByRole("combobox", {
+      name: "Annotation Variant",
+    });
+    await user.selectOptions(annotationSelect, "10");
+
+    // Wait for messages to load
+    await waitFor(() => {
+      expect(screen.getByText("Hello there.")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole("button", { name: /run/i }),
+    ).toBeDisabled();
   });
 });
