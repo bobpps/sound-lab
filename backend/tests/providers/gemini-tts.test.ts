@@ -37,10 +37,10 @@ describe('GeminiTTSProvider', () => {
 
     it('voices have correct structure', async () => {
       const voices = await provider.getVoices();
-      const zephyr = voices.find((v) => v.id === 'zephyr')!;
+      const zephyr = voices.find((v) => v.id === 'Zephyr')!;
 
       expect(zephyr).toEqual({
-        id: 'zephyr',
+        id: 'Zephyr',
         name: 'Zephyr',
         language: 'multi',
         gender: undefined,
@@ -57,12 +57,12 @@ describe('GeminiTTSProvider', () => {
       const ids = voices.map((v) => v.id);
 
       expect(ids).toEqual([
-        'zephyr', 'puck', 'charon', 'kore', 'fenrir',
-        'leda', 'orus', 'aoede', 'callirrhoe', 'autonoe',
-        'enceladus', 'iapetus', 'umbriel', 'algieba', 'despina',
-        'erinome', 'algenib', 'rasalgethi', 'laomedeia', 'achernar',
-        'alnilam', 'schedar', 'gacrux', 'pulcherrima', 'achird',
-        'zubenelgenubi', 'vindemiatrix', 'sadachbia', 'sadaltager', 'sulafat',
+        'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir',
+        'Leda', 'Orus', 'Aoede', 'Callirrhoe', 'Autonoe',
+        'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina',
+        'Erinome', 'Algenib', 'Rasalgethi', 'Laomedeia', 'Achernar',
+        'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima', 'Achird',
+        'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat',
       ]);
     });
   });
@@ -119,7 +119,7 @@ describe('GeminiTTSProvider', () => {
     it('sends POST to Gemini generateContent endpoint', async () => {
       mockFetch.mockResolvedValue(geminiResponse(fakePcmBase64));
 
-      await provider.synthesize({ voiceId: 'kore', text: 'Hello' });
+      await provider.synthesize({ voiceId: 'Kore', text: 'Hello' });
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=test-api-key',
@@ -133,7 +133,7 @@ describe('GeminiTTSProvider', () => {
     it('sends correct request body with voice config', async () => {
       mockFetch.mockResolvedValue(geminiResponse(fakePcmBase64));
 
-      await provider.synthesize({ voiceId: 'kore', text: 'Hello' });
+      await provider.synthesize({ voiceId: 'Kore', text: 'Hello' });
 
       const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(callBody).toEqual({
@@ -152,7 +152,7 @@ describe('GeminiTTSProvider', () => {
     it('uses provided model when specified', async () => {
       mockFetch.mockResolvedValue(geminiResponse(fakePcmBase64));
 
-      await provider.synthesize({ voiceId: 'kore', text: 'Hello', model: 'gemini-2.5-pro-preview-tts' });
+      await provider.synthesize({ voiceId: 'Kore', text: 'Hello', model: 'gemini-2.5-pro-preview-tts' });
 
       const url = mockFetch.mock.calls[0][0];
       expect(url).toContain('gemini-2.5-pro-preview-tts:generateContent');
@@ -161,7 +161,7 @@ describe('GeminiTTSProvider', () => {
     it('returns Buffer with WAV header prepended', async () => {
       mockFetch.mockResolvedValue(geminiResponse(fakePcmBase64));
 
-      const result = await provider.synthesize({ voiceId: 'kore', text: 'Hello' });
+      const result = await provider.synthesize({ voiceId: 'Kore', text: 'Hello' });
 
       expect(Buffer.isBuffer(result)).toBe(true);
       // 44-byte WAV header + 4 bytes PCM
@@ -171,7 +171,7 @@ describe('GeminiTTSProvider', () => {
     it('produces valid WAV header', async () => {
       mockFetch.mockResolvedValue(geminiResponse(fakePcmBase64));
 
-      const result = await provider.synthesize({ voiceId: 'kore', text: 'Hello' });
+      const result = await provider.synthesize({ voiceId: 'Kore', text: 'Hello' });
 
       // RIFF header
       expect(result.toString('ascii', 0, 4)).toBe('RIFF');
@@ -200,7 +200,7 @@ describe('GeminiTTSProvider', () => {
       mockFetch.mockResolvedValue(new Response('Bad Request', { status: 400 }));
 
       await expect(
-        provider.synthesize({ voiceId: 'kore', text: 'Hello' }),
+        provider.synthesize({ voiceId: 'Kore', text: 'Hello' }),
       ).rejects.toThrow('Gemini TTS API error: 400 Bad Request');
     });
 
@@ -210,7 +210,7 @@ describe('GeminiTTSProvider', () => {
       }), { status: 200 }));
 
       await expect(
-        provider.synthesize({ voiceId: 'kore', text: 'Hello' }),
+        provider.synthesize({ voiceId: 'Kore', text: 'Hello' }),
       ).rejects.toThrow('Gemini TTS API error: no audio data in response');
     });
 
@@ -218,7 +218,7 @@ describe('GeminiTTSProvider', () => {
       mockFetch.mockRejectedValue(new Error('Network error'));
 
       await expect(
-        provider.synthesize({ voiceId: 'kore', text: 'Hello' }),
+        provider.synthesize({ voiceId: 'Kore', text: 'Hello' }),
       ).rejects.toThrow('Network error');
     });
   });
