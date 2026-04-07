@@ -17,10 +17,22 @@ const FORMAT_MIME: Record<string, string> = {
   opus: 'audio/opus',
 };
 
-function audioContentType(format?: string): string {
-  if (!format) return 'audio/mpeg';
-  const key = format.toLowerCase().split('_')[0];
-  return FORMAT_MIME[key] ?? FORMAT_MIME[format.toLowerCase()] ?? 'application/octet-stream';
+/** Detect audio MIME from magic bytes when format is not specified. */
+function sniffAudioMime(buf: Buffer): string {
+  if (buf.length >= 4 && buf.toString('ascii', 0, 4) === 'RIFF') return 'audio/wav';
+  if (buf.length >= 4 && buf.toString('ascii', 0, 4) === 'fLaC') return 'audio/flac';
+  if (buf.length >= 4 && buf.toString('ascii', 0, 4) === 'OggS') return 'audio/ogg';
+  if (buf.length >= 3 && buf.toString('ascii', 0, 3) === 'ID3') return 'audio/mpeg';
+  if (buf.length >= 2 && buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return 'audio/mpeg';
+  return 'application/octet-stream';
+}
+
+function audioContentType(format: string | undefined, audio: Buffer): string {
+  if (format) {
+    const key = format.toLowerCase().split('_')[0];
+    return FORMAT_MIME[key] ?? FORMAT_MIME[format.toLowerCase()] ?? 'application/octet-stream';
+  }
+  return sniffAudioMime(audio);
 }
 
 const ttsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -81,7 +93,7 @@ const ttsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     if (!tts) return;
 
     const audio = await tts.synthesize(request.body);
-    void reply.type(audioContentType(request.body.format));
+    void reply.type(audioContentType(request.body.format, audio));
     return reply.send(audio as never);
   });
 };

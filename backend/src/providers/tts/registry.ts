@@ -3,12 +3,14 @@ import { ElevenLabsTTSProvider } from './elevenlabs.js';
 import { GoogleTTSProvider } from './google.js';
 import { InworldTTSProvider } from './inworld.js';
 import { OpenAITTSProvider } from './openai.js';
+import { GeminiTTSProvider } from './gemini.js';
 
 const PROVIDERS: Record<string, new (apiKey: string) => ITTSProvider> = {
   elevenlabs: ElevenLabsTTSProvider,
   google: GoogleTTSProvider,
   inworld: InworldTTSProvider,
   'openai-tts': OpenAITTSProvider,
+  'gemini-tts': GeminiTTSProvider,
 };
 
 export function createTTSProvider(providerId: string, apiKey: string): ITTSProvider {

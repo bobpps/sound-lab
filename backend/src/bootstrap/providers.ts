@@ -12,6 +12,7 @@ export const DEFAULT_PROVIDER_SEEDS: ProviderSeed[] = [
   { id: 'google', name: 'Google', type: 'tts' },
   { id: 'inworld', name: 'Inworld', type: 'tts' },
   { id: 'openai-tts', name: 'OpenAI TTS', type: 'tts' },
+  { id: 'gemini-tts', name: 'Gemini TTS', type: 'tts' },
   { id: 'openai', name: 'OpenAI', type: 'llm' },
   { id: 'anthropic', name: 'Anthropic', type: 'llm' },
   // Provider IDs are globally unique across all types.
