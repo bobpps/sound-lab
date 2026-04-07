@@ -12,7 +12,6 @@ import {
   useDialogList,
   useDialogDetail,
   ttsVoiceKeys,
-  annotationKeys,
 } from "./queries.ts";
 
 const voices = [
