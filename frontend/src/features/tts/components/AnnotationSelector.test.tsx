@@ -21,6 +21,14 @@ const annotations = [
     created_by: null,
     created_at: "2026-04-03T10:00:00.000Z",
   },
+  {
+    id: 12,
+    dialog_id: 1,
+    provider_id: "elevenlabs",
+    title: "ElevenLabs annotation",
+    created_by: null,
+    created_at: "2026-04-04T10:00:00.000Z",
+  },
 ];
 
 function jsonResponse(body: unknown, status = 200) {
@@ -51,6 +59,7 @@ describe("AnnotationSelector", () => {
     renderWithProviders(
       <AnnotationSelector
         dialogId={1}
+        providerId="openai"
         selectedAnnotationId={null}
         onSelect={onSelect}
       />,
@@ -77,6 +86,7 @@ describe("AnnotationSelector", () => {
     renderWithProviders(
       <AnnotationSelector
         dialogId={1}
+        providerId="openai"
         selectedAnnotationId={10}
         onSelect={onSelect}
       />,
@@ -100,6 +110,7 @@ describe("AnnotationSelector", () => {
     renderWithProviders(
       <AnnotationSelector
         dialogId={1}
+        providerId="openai"
         selectedAnnotationId={null}
         onSelect={onSelect}
       />,
@@ -117,6 +128,7 @@ describe("AnnotationSelector", () => {
     renderWithProviders(
       <AnnotationSelector
         dialogId={1}
+        providerId="openai"
         selectedAnnotationId={null}
         onSelect={onSelect}
       />,
@@ -131,6 +143,7 @@ describe("AnnotationSelector", () => {
     renderWithProviders(
       <AnnotationSelector
         dialogId={1}
+        providerId="openai"
         selectedAnnotationId={10}
         onSelect={onSelect}
       />,
@@ -143,10 +156,33 @@ describe("AnnotationSelector", () => {
     expect(select).toHaveValue("10");
   });
 
+  it("only shows annotations for the selected provider", async () => {
+    renderWithProviders(
+      <AnnotationSelector
+        dialogId={1}
+        providerId="openai"
+        selectedAnnotationId={null}
+        onSelect={onSelect}
+      />,
+    );
+
+    const select = await screen.findByRole("combobox", {
+      name: "Annotation Variant",
+    });
+
+    const options = select.querySelectorAll("option");
+    const optionTexts = Array.from(options).map((o) => o.textContent);
+
+    expect(optionTexts).toContain("Formal annotation");
+    expect(optionTexts).toContain("Casual annotation");
+    expect(optionTexts).not.toContain("ElevenLabs annotation");
+  });
+
   it("shows 'Clean' as selected when selectedAnnotationId is null", async () => {
     renderWithProviders(
       <AnnotationSelector
         dialogId={1}
+        providerId="openai"
         selectedAnnotationId={null}
         onSelect={onSelect}
       />,

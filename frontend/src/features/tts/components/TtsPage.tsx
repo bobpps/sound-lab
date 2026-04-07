@@ -50,9 +50,10 @@ export function TtsPage() {
             />
           )}
 
-          {selectedDialogId !== null && (
+          {selectedProviderId !== null && selectedDialogId !== null && (
             <AnnotationSelector
               dialogId={selectedDialogId}
+              providerId={selectedProviderId}
               selectedAnnotationId={selectedAnnotationId}
               onSelect={handleAnnotationSelect}
             />

@@ -29,7 +29,7 @@ const annotations = [
   {
     id: 10,
     dialog_id: 1,
-    provider_id: "openai",
+    provider_id: "elevenlabs",
     title: "Formal annotation",
     created_by: null,
     created_at: "2026-04-02T10:00:00.000Z",
