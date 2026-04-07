@@ -3,17 +3,23 @@ import type { ITTSProvider, IVoice, ISynthesizeOptions } from './types.js';
 const BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'gpt-4o-mini-tts';
 
-const BUILT_IN_VOICE_IDS = [
-  'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable',
-  'onyx', 'nova', 'sage', 'shimmer', 'verse', 'marin', 'cedar',
+const ALL_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'] as const;
+
+/** Voices supported by all models (tts-1, tts-1-hd, gpt-4o-mini-tts). */
+const UNIVERSAL_VOICE_IDS = [
+  'alloy', 'ash', 'coral', 'echo', 'fable',
+  'onyx', 'nova', 'sage', 'shimmer',
 ] as const;
 
-interface OpenAIVoice {
-  voice_id: string;
-  name: string;
-  type?: string;
-  description?: string | null;
-}
+/** Voices only supported by gpt-4o-mini-tts. */
+const MINI_TTS_ONLY_VOICE_IDS = [
+  'ballad', 'verse', 'marin', 'cedar',
+] as const;
+
+const BUILT_IN_VOICE_IDS: readonly string[] = [
+  ...UNIVERSAL_VOICE_IDS,
+  ...MINI_TTS_ONLY_VOICE_IDS,
+];
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -23,28 +29,32 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function mapVoice(v: OpenAIVoice): IVoice {
-  return {
-    id: v.voice_id,
-    name: v.name,
-    language: 'multi',
-    gender: undefined,
-    description: v.description ?? undefined,
-    previewUrl: undefined,
-    providerMeta: v.type ? { type: v.type } : undefined,
-  };
-}
-
 function buildStaticVoices(): IVoice[] {
-  return BUILT_IN_VOICE_IDS.map((id) => ({
+  const universal = UNIVERSAL_VOICE_IDS.map((id) => ({
     id,
     name: capitalize(id),
     language: 'multi',
     gender: undefined,
     description: undefined,
     previewUrl: undefined,
-    providerMeta: { type: 'builtin' },
+    providerMeta: { type: 'builtin', supportedModels: [...ALL_MODELS] },
   }));
+
+  const miniOnly = MINI_TTS_ONLY_VOICE_IDS.map((id) => ({
+    id,
+    name: capitalize(id),
+    language: 'multi',
+    gender: undefined,
+    description: undefined,
+    previewUrl: undefined,
+    providerMeta: { type: 'builtin', supportedModels: ['gpt-4o-mini-tts'] },
+  }));
+
+  return [...universal, ...miniOnly];
+}
+
+function resolveVoiceParam(voiceId: string): string | { id: string } {
+  return BUILT_IN_VOICE_IDS.includes(voiceId) ? voiceId : { id: voiceId };
 }
 
 export class OpenAITTSProvider implements ITTSProvider {
@@ -54,20 +64,7 @@ export class OpenAITTSProvider implements ITTSProvider {
   constructor(private readonly apiKey: string) {}
 
   async getVoices(): Promise<IVoice[]> {
-    try {
-      const response = await fetch(`${BASE_URL}/audio/voices`, {
-        headers: { Authorization: `Bearer ${this.apiKey}` },
-      });
-
-      if (!response.ok) {
-        return buildStaticVoices();
-      }
-
-      const data = (await response.json()) as OpenAIVoice[];
-      return data.map(mapVoice);
-    } catch {
-      return buildStaticVoices();
-    }
+    return buildStaticVoices();
   }
 
   async synthesize(opts: ISynthesizeOptions): Promise<Buffer> {
@@ -79,7 +76,7 @@ export class OpenAITTSProvider implements ITTSProvider {
       },
       body: JSON.stringify({
         model: opts.model ?? DEFAULT_MODEL,
-        voice: opts.voiceId,
+        voice: resolveVoiceParam(opts.voiceId),
         input: opts.text,
         response_format: opts.format ?? 'mp3',
         speed: clamp(opts.speed ?? 1.0, 0.25, 4.0),

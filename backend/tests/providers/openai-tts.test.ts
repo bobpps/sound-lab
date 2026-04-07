@@ -55,81 +55,61 @@ describe('OpenAITTSProvider', () => {
   });
 
   describe('getVoices', () => {
-    const voicesResponse = [
-      {
-        voice_id: 'alloy',
-        name: 'Alloy',
-        type: 'builtin',
-        description: 'A neutral and balanced voice',
-      },
-      {
-        voice_id: 'nova',
-        name: 'Nova',
-        type: 'builtin',
-        description: 'A warm and expressive voice',
-      },
-    ];
-
-    it('fetches from OpenAI voices endpoint with Bearer auth', async () => {
-      mockFetch.mockResolvedValue(
-        new Response(JSON.stringify(voicesResponse), { status: 200 }),
-      );
-
-      await provider.getVoices();
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.openai.com/v1/audio/voices',
-        { headers: { Authorization: 'Bearer test-api-key' } },
-      );
-    });
-
-    it('returns mapped IVoice array from API response', async () => {
-      mockFetch.mockResolvedValue(
-        new Response(JSON.stringify(voicesResponse), { status: 200 }),
-      );
-
-      const voices = await provider.getVoices();
-
-      expect(voices).toHaveLength(2);
-      expect(voices[0]).toEqual({
-        id: 'alloy',
-        name: 'Alloy',
-        language: 'multi',
-        gender: undefined,
-        description: 'A neutral and balanced voice',
-        previewUrl: undefined,
-        providerMeta: { type: 'builtin' },
-      });
-    });
-
-    it('falls back to static voice list when API returns non-200', async () => {
-      mockFetch.mockResolvedValue(new Response('Not Found', { status: 404 }));
-
+    it('returns 13 built-in voices', async () => {
       const voices = await provider.getVoices();
 
       expect(voices).toHaveLength(13);
       expect(voices.map((v) => v.id)).toEqual([
-        'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable',
-        'onyx', 'nova', 'sage', 'shimmer', 'verse', 'marin', 'cedar',
+        'alloy', 'ash', 'coral', 'echo', 'fable',
+        'onyx', 'nova', 'sage', 'shimmer',
+        'ballad', 'verse', 'marin', 'cedar',
       ]);
     });
 
-    it('falls back to static voice list when fetch throws', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
+    it('does not call fetch', async () => {
+      await provider.getVoices();
 
-      const voices = await provider.getVoices();
-
-      expect(voices).toHaveLength(13);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('static fallback voices have correct structure', async () => {
-      mockFetch.mockResolvedValue(new Response('Error', { status: 500 }));
-
+    it('voices have correct structure', async () => {
       const voices = await provider.getVoices();
       const alloy = voices.find((v) => v.id === 'alloy')!;
 
-      expect(alloy.name).toBe('Alloy');
-      expect(alloy.language).toBe('multi');
+      expect(alloy).toEqual({
+        id: 'alloy',
+        name: 'Alloy',
+        language: 'multi',
+        gender: undefined,
+        description: undefined,
+        previewUrl: undefined,
+        providerMeta: {
+          type: 'builtin',
+          supportedModels: ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'],
+        },
+      });
+    });
+
+    it('universal voices support all 3 models', async () => {
+      const voices = await provider.getVoices();
+      const universal = ['alloy', 'ash', 'coral', 'echo', 'fable', 'onyx', 'nova', 'sage', 'shimmer'];
+
+      for (const id of universal) {
+        const voice = voices.find((v) => v.id === id)!;
+        expect(voice.providerMeta!.supportedModels).toEqual(
+          ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'],
+        );
+      }
+    });
+
+    it('mini-tts-only voices support only gpt-4o-mini-tts', async () => {
+      const voices = await provider.getVoices();
+      const miniOnly = ['ballad', 'verse', 'marin', 'cedar'];
+
+      for (const id of miniOnly) {
+        const voice = voices.find((v) => v.id === id)!;
+        expect(voice.providerMeta!.supportedModels).toEqual(['gpt-4o-mini-tts']);
+      }
     });
   });
 
@@ -151,6 +131,24 @@ describe('OpenAITTSProvider', () => {
           },
         }),
       );
+    });
+
+    it('sends built-in voice as string', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({ voiceId: 'alloy', text: 'Hello' });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody.voice).toBe('alloy');
+    });
+
+    it('sends custom voice as object with id', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({ voiceId: 'voice_123abc', text: 'Hello' });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody.voice).toEqual({ id: 'voice_123abc' });
     });
 
     it('sends correct body with defaults', async () => {
