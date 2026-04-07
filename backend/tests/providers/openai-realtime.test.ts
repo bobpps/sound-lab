@@ -365,6 +365,7 @@ describe('OpenAIRealtimeProvider', () => {
         eventId: undefined,
       },
     });
+    expect(socket.close).toHaveBeenCalledWith(1011, 'Invalid model');
   });
 
   it('does not emit session_end when the session is closed intentionally', async () => {
@@ -385,6 +386,31 @@ describe('OpenAIRealtimeProvider', () => {
     await session.close();
 
     expect(socket.close).toHaveBeenCalledWith(1000, 'Session closed');
+    expect(onEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'session_end' }),
+    );
+  });
+
+  it('closes the upstream socket when session.update cannot be sent', async () => {
+    const onEvent = vi.fn<(event: RealtimeEvent) => void>();
+    const sessionPromise = provider.createSession(
+      {
+        model: 'gpt-realtime',
+        systemPrompt: 'Be concise',
+      },
+      onEvent,
+    );
+
+    const socket = mockSocketInstances[0];
+    socket.send.mockImplementationOnce((_data: string, callback?: (error?: Error) => void) => {
+      callback?.(new Error('send failed'));
+      return true;
+    });
+
+    socket.open();
+
+    await expect(sessionPromise).rejects.toThrow('send failed');
+    expect(socket.close).toHaveBeenCalledWith(1011, 'send failed');
     expect(onEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'session_end' }),
     );

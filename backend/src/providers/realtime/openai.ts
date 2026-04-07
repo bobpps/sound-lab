@@ -123,6 +123,14 @@ function sendJson(socket: WebSocket, payload: Record<string, unknown>): Promise<
   });
 }
 
+function closeSocket(socket: WebSocket, code: number, reason: string): void {
+  if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
+    return;
+  }
+
+  socket.close(code, reason);
+}
+
 function buildSessionUpdate(config: RealtimeSessionConfig): Record<string, unknown> {
   const session: Record<string, unknown> = {
     type: 'realtime',
@@ -280,12 +288,15 @@ export class OpenAIRealtimeProvider implements IRealtimeProvider {
         reject(payload as Error);
       };
 
+      const failStartup = (message: string): void => {
+        suppressRemoteSessionEnd();
+        settleStartup('reject', new Error(message));
+        closeSocket(socket, 1011, message);
+      };
+
       socket.on('open', () => {
         void sendJson(socket, buildSessionUpdate(config)).catch((error) => {
-          settleStartup(
-            'reject',
-            new Error(getErrorMessage(error, 'Failed to configure OpenAI Realtime session')),
-          );
+          failStartup(getErrorMessage(error, 'Failed to configure OpenAI Realtime session'));
         });
       });
 
@@ -366,7 +377,7 @@ export class OpenAIRealtimeProvider implements IRealtimeProvider {
             }));
 
             if (!startupSettled) {
-              settleStartup('reject', new Error(realtimeError.message));
+              failStartup(realtimeError.message);
             }
             return;
           }
@@ -381,7 +392,7 @@ export class OpenAIRealtimeProvider implements IRealtimeProvider {
         onEvent(createErrorEvent(message, { source: 'openai' }));
 
         if (!startupSettled) {
-          settleStartup('reject', new Error(message));
+          failStartup(message);
         }
       });
 
