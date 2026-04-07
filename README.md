@@ -16,7 +16,7 @@ Internal tool for testing TTS providers, realtime voice agents, and managing dia
 | Frontend | React 19, Vite 8, TypeScript |
 | Backend | Fastify 5, TypeScript |
 | Database | Supabase (Postgres) or SQLite (local dev) |
-| TTS | Google, ElevenLabs, Inworld, Gemini |
+| TTS | Google, ElevenLabs, Inworld, OpenAI, Gemini |
 | LLM | OpenAI, Anthropic |
 | Auth | Supabase Auth (production) / single-user (local) |
 

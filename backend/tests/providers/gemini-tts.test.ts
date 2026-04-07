@@ -75,7 +75,8 @@ describe('GeminiTTSProvider', () => {
 
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts?key=test-api-key',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts',
+        { headers: { 'x-goog-api-key': 'test-api-key' } },
       );
     });
 
@@ -122,10 +123,13 @@ describe('GeminiTTSProvider', () => {
       await provider.synthesize({ voiceId: 'Kore', text: 'Hello' });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=test-api-key',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent',
         expect.objectContaining({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': 'test-api-key',
+          },
         }),
       );
     });
@@ -194,6 +198,22 @@ describe('GeminiTTSProvider', () => {
 
       // actual PCM data after header
       expect(result.subarray(44)).toEqual(fakePcm);
+    });
+
+    it('accepts format "wav" without error', async () => {
+      mockFetch.mockResolvedValue(geminiResponse(fakePcmBase64));
+
+      const result = await provider.synthesize({ voiceId: 'Kore', text: 'Hello', format: 'wav' });
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+    });
+
+    it('throws when unsupported format is requested', async () => {
+      await expect(
+        provider.synthesize({ voiceId: 'Kore', text: 'Hello', format: 'mp3' }),
+      ).rejects.toThrow('Gemini TTS only supports wav format, got: mp3');
+
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('throws on non-200 response', async () => {

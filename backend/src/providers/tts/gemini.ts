@@ -60,12 +60,19 @@ export class GeminiTTSProvider implements ITTSProvider {
   }
 
   async synthesize(opts: ISynthesizeOptions): Promise<Buffer> {
+    if (opts.format && opts.format !== 'wav') {
+      throw new Error(`Gemini TTS only supports wav format, got: ${opts.format}`);
+    }
+
     const model = opts.model ?? DEFAULT_MODEL;
-    const url = `${BASE_URL}/${model}:generateContent?key=${this.apiKey}`;
+    const url = `${BASE_URL}/${model}:generateContent`;
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': this.apiKey,
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: opts.text }] }],
         generationConfig: {
@@ -97,9 +104,9 @@ export class GeminiTTSProvider implements ITTSProvider {
 
   async validateCredentials(): Promise<boolean> {
     try {
-      const response = await fetch(
-        `${BASE_URL}/${DEFAULT_MODEL}?key=${this.apiKey}`,
-      );
+      const response = await fetch(`${BASE_URL}/${DEFAULT_MODEL}`, {
+        headers: { 'x-goog-api-key': this.apiKey },
+      });
       return response.ok;
     } catch {
       return false;
