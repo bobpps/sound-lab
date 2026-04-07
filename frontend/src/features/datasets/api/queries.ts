@@ -49,6 +49,21 @@ export interface UpdateAnnotationPromptInput {
   prompt?: string;
 }
 
+export interface GenerateDialogInput {
+  providerId: string;
+  model: string;
+  language: string;
+  prompt: string;
+  messageCount: number;
+}
+
+export interface EditDialogInput {
+  dialogId: number;
+  providerId: string;
+  model: string;
+  instructions: string;
+}
+
 export const dialogKeys = {
   all: ["dialogs"] as const,
   list: () => [...dialogKeys.all, "list"] as const,
@@ -64,6 +79,11 @@ export const annotationPromptKeys = {
 
 export const ttsProviderKeys = {
   list: () => ["providers", "tts"] as const,
+};
+
+export const llmKeys = {
+  all: ["llm"] as const,
+  models: (providerId: string) => [...llmKeys.all, "models", providerId] as const,
 };
 
 async function fetchDialogs(): Promise<Dialog[]> {
@@ -120,6 +140,14 @@ export function useTtsProviders() {
   return useQuery({
     queryKey: ttsProviderKeys.list(),
     queryFn: fetchTtsProviders,
+  });
+}
+
+export function useLlmModels(providerId: string | null) {
+  return useQuery({
+    queryKey: llmKeys.models(providerId ?? ""),
+    queryFn: () => api.get<string[]>(`/llm/${providerId}/models`),
+    enabled: providerId !== null && providerId.length > 0,
   });
 }
 
@@ -257,7 +285,8 @@ export function useUpdateMessage() {
       dialogId: number;
       messageId: number;
       data: UpdateMessageInput;
-    }) => api.put<DialogMessage>(`/dialogs/${dialogId}/messages/${messageId}`, data),
+    }) =>
+      api.put<DialogMessage>(`/dialogs/${dialogId}/messages/${messageId}`, data),
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({
         queryKey: dialogKeys.detail(variables.dialogId),
@@ -280,6 +309,34 @@ export function useDeleteMessage() {
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({
         queryKey: dialogKeys.detail(variables.dialogId),
+      });
+    },
+  });
+}
+
+export function useGenerateDialog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: GenerateDialogInput) =>
+      api.post<DialogWithMessages>("/services/generate-dialog", input),
+    onSuccess: async (dialog) => {
+      queryClient.setQueryData(dialogKeys.detail(dialog.id), dialog);
+      await queryClient.invalidateQueries({ queryKey: dialogKeys.list() });
+    },
+  });
+}
+
+export function useEditDialog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: EditDialogInput) =>
+      api.post<DialogWithMessages>("/services/edit-dialog", input),
+    onSuccess: async (dialog) => {
+      queryClient.setQueryData(dialogKeys.detail(dialog.id), dialog);
+      await queryClient.invalidateQueries({
+        queryKey: dialogKeys.detail(dialog.id),
       });
     },
   });

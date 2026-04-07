@@ -24,6 +24,24 @@ const dialogs = [
   },
 ];
 
+const generatedDialog = {
+  id: 99,
+  title: "Generated support flow",
+  description: null,
+  language: "en-US",
+  created_by: null,
+  created_at: "2026-04-03T10:00:00.000Z",
+  messages: [
+    {
+      id: 300,
+      dialog_id: 99,
+      order: 1,
+      character: 1,
+      text: "Hello there",
+    },
+  ],
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -60,14 +78,15 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = extractUrl(input);
+      const method = init?.method ?? "GET";
 
-      if (url.endsWith("/api/dialogs") && (!init?.method || init.method === "GET")) {
+      if (url.endsWith("/api/dialogs") && method === "GET") {
         return jsonResponse(dialogs);
       }
 
-      if (url.endsWith("/api/dialogs") && init?.method === "POST") {
+      if (url.endsWith("/api/dialogs") && method === "POST") {
         return jsonResponse({
-          id: 99,
+          id: 100,
           title: "Untitled dialog",
           description: null,
           language: "en-US",
@@ -76,7 +95,34 @@ beforeEach(() => {
         }, 201);
       }
 
-      return jsonResponse({ message: "Not Found" }, 404);
+      if (url.endsWith("/api/providers?type=llm") && method === "GET") {
+        return jsonResponse([
+          {
+            id: "openai",
+            name: "OpenAI",
+            type: "llm",
+            enabled: true,
+            created_at: "2026-04-03T10:00:00.000Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/llm/openai/models") && method === "GET") {
+        return jsonResponse(["gpt-4o"]);
+      }
+
+      if (url.endsWith("/api/services/generate-dialog") && method === "POST") {
+        return jsonResponse(generatedDialog, 201);
+      }
+
+      return jsonResponse(
+        {
+          statusCode: 404,
+          error: "Not Found",
+          message: "Not Found",
+        },
+        404,
+      );
     }),
   );
 });
@@ -103,6 +149,28 @@ describe("DialogList", () => {
 
     await screen.findByRole("button", { name: "New Dialog" });
     await user.click(screen.getByRole("button", { name: "New Dialog" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Editor Stub" }),
+    ).toBeInTheDocument();
+  });
+
+  it("generates a new dialog through the LLM modal and navigates to the editor", async () => {
+    const user = userEvent.setup();
+
+    renderDialogList();
+
+    await screen.findByRole("button", { name: "Generate New" });
+    await user.click(screen.getByRole("button", { name: "Generate New" }));
+
+    await screen.findByRole("dialog", { name: "Generate Dialog" });
+    await screen.findByRole("option", { name: "gpt-4o" });
+
+    await user.type(
+      screen.getByLabelText("Prompt"),
+      "Generate a short retail support exchange",
+    );
+    await user.click(screen.getByRole("button", { name: "Generate Dialog" }));
 
     expect(
       await screen.findByRole("heading", { name: "Editor Stub" }),
