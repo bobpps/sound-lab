@@ -8,6 +8,7 @@ import {
   type PlaybackMessage,
   type VoiceMap,
 } from "../hooks/useAudioPlayback.ts";
+import { AnnotationEditor } from "./AnnotationEditor.tsx";
 import { AnnotationSelector } from "./AnnotationSelector.tsx";
 import { DialogSelector } from "./DialogSelector.tsx";
 import { PlaybackControls } from "./PlaybackControls.tsx";
@@ -154,6 +155,20 @@ export function TtsPage() {
           )}
         </div>
       </div>
+
+      {/* Annotation Editor — shown when an annotation variant is selected */}
+      {selectedAnnotationId !== null &&
+        selectedDialogId !== null &&
+        selectedProviderId !== null && (
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <AnnotationEditor
+              annotationId={selectedAnnotationId}
+              dialogId={selectedDialogId}
+              ttsProviderId={selectedProviderId}
+              onAnnotationCreated={handleAnnotationSelect}
+            />
+          </div>
+        )}
 
       {/* Voice Assignment — shown after provider + dialog selected */}
       {selectedProviderId && selectedDialogId !== null && (

@@ -194,4 +194,25 @@ describe("AnnotationSelector", () => {
 
     expect(select).toHaveValue("clean");
   });
+
+  it("filters annotations by provider_id", async () => {
+    renderWithProviders(
+      <AnnotationSelector
+        dialogId={1}
+        providerId="openai"
+        selectedAnnotationId={null}
+        onSelect={onSelect}
+      />,
+    );
+
+    await screen.findByRole("combobox", { name: "Annotation Variant" });
+
+    const options = screen.getAllByRole("option");
+    const optionTexts = options.map((o) => o.textContent);
+
+    // Should show openai annotations but not elevenlabs
+    expect(optionTexts).toContain("Formal annotation");
+    expect(optionTexts).toContain("Casual annotation");
+    expect(optionTexts).not.toContain("ElevenLabs annotation");
+  });
 });

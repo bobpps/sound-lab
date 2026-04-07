@@ -81,7 +81,7 @@ describe("TtsPage", () => {
           return jsonResponse(providers);
         }
 
-        if (url.endsWith("/api/dialogs")) {
+        if (url.endsWith("/api/dialogs") && !url.includes("/1")) {
           return jsonResponse(dialogs);
         }
 
@@ -373,13 +373,71 @@ describe("TtsPage", () => {
     });
     await user.selectOptions(annotationSelect, "10");
 
-    // Wait for messages to load
+    // Wait for messages to load (multiple elements match because AnnotationEditor also renders the text)
     await waitFor(() => {
-      expect(screen.getByText("Hello there.")).toBeInTheDocument();
+      expect(screen.getAllByText("Hello there.").length).toBeGreaterThan(0);
     });
 
     expect(
       screen.getByRole("button", { name: /run/i }),
     ).toBeDisabled();
+  });
+
+  it("shows annotation editor when an annotation variant is selected", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<TtsPage />);
+
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
+    });
+    await user.selectOptions(providerSelect, "elevenlabs");
+
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
+    });
+    await user.selectOptions(dialogSelect, "1");
+
+    const annotationSelect = await screen.findByRole("combobox", {
+      name: "Annotation Variant",
+    });
+    await user.selectOptions(annotationSelect, "10");
+
+    // Editor should appear
+    expect(
+      await screen.findByRole("heading", { name: "Annotation Editor" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides annotation editor when Clean variant is selected", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<TtsPage />);
+
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
+    });
+    await user.selectOptions(providerSelect, "elevenlabs");
+
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
+    });
+    await user.selectOptions(dialogSelect, "1");
+
+    const annotationSelect = await screen.findByRole("combobox", {
+      name: "Annotation Variant",
+    });
+    await user.selectOptions(annotationSelect, "10");
+
+    // Editor should appear
+    await screen.findByRole("heading", { name: "Annotation Editor" });
+
+    // Switch back to "Clean"
+    await user.selectOptions(annotationSelect, "clean");
+
+    // Editor should disappear
+    expect(
+      screen.queryByRole("heading", { name: "Annotation Editor" }),
+    ).not.toBeInTheDocument();
   });
 });
