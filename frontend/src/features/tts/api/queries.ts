@@ -95,3 +95,111 @@ export function useAnnotationPrompts() {
     queryFn: () => api.get<AnnotationPrompt[]>("/annotation-prompts"),
   });
 }
+
+// --- Mutation input types ---
+
+export interface AutoAnnotateInput {
+  dialogId: number;
+  providerId: string;
+  model: string;
+  annotationPromptId: number;
+  ttsProviderId: string;
+  title: string;
+}
+
+export interface CreateAnnotationInput {
+  provider_id: string;
+  title: string;
+}
+
+export interface CreateAnnotationMessageInput {
+  dialog_message_id: number;
+  text: string;
+}
+
+export interface UpdateAnnotatedMessageInput {
+  text: string;
+}
+
+// --- Mutation hooks ---
+
+export function useAutoAnnotate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: AutoAnnotateInput) =>
+      api.post<AnnotatedDialogWithMessages>("/services/annotate", input),
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({
+        queryKey: ttsKeys.annotations(data.dialog_id),
+      });
+    },
+  });
+}
+
+export function useCreateAnnotation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      dialogId,
+      data,
+    }: {
+      dialogId: number;
+      data: CreateAnnotationInput;
+    }) => api.post<AnnotatedDialog>(`/dialogs/${dialogId}/annotations`, data),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: ttsKeys.annotations(variables.dialogId),
+      });
+    },
+  });
+}
+
+export function useCreateAnnotationMessage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      annotationId,
+      data,
+    }: {
+      annotationId: number;
+      data: CreateAnnotationMessageInput;
+    }) =>
+      api.post<AnnotatedMessage>(
+        `/annotations/${annotationId}/messages`,
+        data,
+      ),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: ttsKeys.annotation(variables.annotationId),
+      });
+    },
+  });
+}
+
+export function useUpdateAnnotatedMessage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      annotationId,
+      messageId,
+      data,
+    }: {
+      annotationId: number;
+      messageId: number;
+      data: UpdateAnnotatedMessageInput;
+    }) =>
+      api.put<AnnotatedMessage>(
+        `/annotations/${annotationId}/messages/${messageId}`,
+        data,
+      ),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: ttsKeys.annotation(variables.annotationId),
+      });
+    },
+  });
+}

@@ -15,6 +15,10 @@ import {
   useLlmProviders,
   useLlmModels,
   useAnnotationPrompts,
+  useAutoAnnotate,
+  useCreateAnnotation,
+  useCreateAnnotationMessage,
+  useUpdateAnnotatedMessage,
 } from "./queries.ts";
 
 const providers = [
@@ -141,8 +145,9 @@ describe("tts queries", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: string | URL | Request) => {
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = extractUrl(input);
+        const method = init?.method ?? "GET";
 
         if (url.endsWith("/api/providers?type=tts")) {
           return jsonResponse(providers);
@@ -152,19 +157,19 @@ describe("tts queries", () => {
           return jsonResponse(voices);
         }
 
-        if (url.endsWith("/api/dialogs")) {
+        if (url.endsWith("/api/dialogs") && method === "GET") {
           return jsonResponse(dialogs);
         }
 
-        if (url.endsWith("/api/dialogs/1/annotations")) {
+        if (url.endsWith("/api/dialogs/1/annotations") && method === "GET") {
           return jsonResponse(annotations);
         }
 
-        if (url.endsWith("/api/annotations/10")) {
+        if (url.endsWith("/api/annotations/10") && method === "GET") {
           return jsonResponse(annotationWithMessages);
         }
 
-        if (url.endsWith("/api/dialogs/1")) {
+        if (url.endsWith("/api/dialogs/1") && method === "GET") {
           return jsonResponse(dialogWithMessages);
         }
 
@@ -178,6 +183,50 @@ describe("tts queries", () => {
 
         if (url.endsWith("/api/annotation-prompts")) {
           return jsonResponse(annotationPrompts);
+        }
+
+        if (url.endsWith("/api/services/annotate") && method === "POST") {
+          return jsonResponse({
+            ...annotationWithMessages,
+            id: 20,
+            title: "Auto-annotated",
+          });
+        }
+
+        if (
+          url.match(/\/api\/dialogs\/\d+\/annotations$/) &&
+          method === "POST"
+        ) {
+          const body = JSON.parse(init?.body as string);
+          return jsonResponse(
+            {
+              id: 20,
+              dialog_id: 1,
+              ...body,
+              created_by: null,
+              created_at: "2026-04-02T10:00:00.000Z",
+            },
+            201,
+          );
+        }
+
+        if (
+          url.match(/\/api\/annotations\/\d+\/messages$/) &&
+          method === "POST"
+        ) {
+          const body = JSON.parse(init?.body as string);
+          return jsonResponse(
+            { id: 200, annotated_dialog_id: 10, ...body },
+            201,
+          );
+        }
+
+        if (
+          url.match(/\/api\/annotations\/\d+\/messages\/\d+/) &&
+          method === "PUT"
+        ) {
+          const body = JSON.parse(init?.body as string);
+          return jsonResponse({ id: 100, annotated_dialog_id: 10, dialog_message_id: 1, ...body });
         }
 
         return jsonResponse({ message: "Not Found" }, 404);
@@ -417,5 +466,112 @@ describe("tts queries", () => {
       "openai",
     ]);
     expect(ttsKeys.annotationPrompts()).toEqual(["tts", "annotationPrompts"]);
+  });
+
+  it("auto-annotates and invalidates annotation queries", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    // Seed the annotations cache to verify invalidation
+    queryClient.setQueryData(ttsKeys.annotations(1), annotations);
+
+    const { result } = renderHook(() => useAutoAnnotate(), { wrapper });
+
+    await result.current.mutateAsync({
+      dialogId: 1,
+      providerId: "openai",
+      model: "gpt-4o",
+      annotationPromptId: 1,
+      ttsProviderId: "elevenlabs",
+      title: "Auto-annotated",
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/services/annotate",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          dialogId: 1,
+          providerId: "openai",
+          model: "gpt-4o",
+          annotationPromptId: 1,
+          ttsProviderId: "elevenlabs",
+          title: "Auto-annotated",
+        }),
+      }),
+    );
+  });
+
+  it("creates an annotation shell and invalidates annotations list", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    queryClient.setQueryData(ttsKeys.annotations(1), annotations);
+
+    const { result } = renderHook(() => useCreateAnnotation(), { wrapper });
+
+    await result.current.mutateAsync({
+      dialogId: 1,
+      data: { provider_id: "elevenlabs", title: "New variant" },
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/dialogs/1/annotations",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          provider_id: "elevenlabs",
+          title: "New variant",
+        }),
+      }),
+    );
+  });
+
+  it("creates an annotated message", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useCreateAnnotationMessage(), {
+      wrapper,
+    });
+
+    await result.current.mutateAsync({
+      annotationId: 10,
+      data: { dialog_message_id: 1, text: "Annotated text" },
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/annotations/10/messages",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          dialog_message_id: 1,
+          text: "Annotated text",
+        }),
+      }),
+    );
+  });
+
+  it("updates an annotated message", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useUpdateAnnotatedMessage(), {
+      wrapper,
+    });
+
+    await result.current.mutateAsync({
+      annotationId: 10,
+      messageId: 100,
+      data: { text: "Updated text" },
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/annotations/10/messages/100",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ text: "Updated text" }),
+      }),
+    );
   });
 });
