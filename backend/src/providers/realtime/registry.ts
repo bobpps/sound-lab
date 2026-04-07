@@ -1,4 +1,5 @@
 import type { IRealtimeProvider } from './types.js';
+import { ElevenLabsRealtimeProvider } from './elevenlabs.js';
 import { GeminiRealtimeProvider } from './gemini.js';
 
 export type RealtimeProviderConstructor = new (apiKey: string) => IRealtimeProvider;
@@ -26,4 +27,5 @@ export function getSupportedRealtimeProviders(): string[] {
   return Object.keys(PROVIDERS);
 }
 
+registerRealtimeProvider('elevenlabs-realtime', ElevenLabsRealtimeProvider);
 registerRealtimeProvider('gemini-realtime', GeminiRealtimeProvider);
