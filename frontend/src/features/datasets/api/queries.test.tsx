@@ -5,15 +5,21 @@ import {
   createTestWrapper,
 } from "../../../test-utils.tsx";
 import {
+  annotationPromptKeys,
   dialogKeys,
+  ttsProviderKeys,
+  useAnnotationPrompt,
+  useAnnotationPrompts,
+  useCreateAnnotationPrompt,
   useCreateDialog,
   useDialogs,
   useEditDialog,
   useGenerateDialog,
   useLlmModels,
+  useTtsProviders,
 } from "./queries.ts";
 
-const existingDialog = {
+const createdDialog = {
   id: 5,
   title: "Untitled dialog",
   description: null,
@@ -22,8 +28,18 @@ const existingDialog = {
   created_at: "2026-04-03T10:00:00.000Z",
 };
 
+const createdPrompt = {
+  id: 7,
+  title: "Narration prompt",
+  provider_id: "google",
+  language: "en-US",
+  prompt: "Annotate this dialog for narration.",
+  created_by: null,
+  created_at: "2026-04-03T11:00:00.000Z",
+};
+
 const existingDialogDetail = {
-  ...existingDialog,
+  ...createdDialog,
   messages: [
     {
       id: 11,
@@ -61,7 +77,7 @@ const generatedDialog = {
 };
 
 const editedDialog = {
-  ...existingDialog,
+  ...createdDialog,
   messages: [
     {
       id: 11,
@@ -72,6 +88,16 @@ const editedDialog = {
     },
   ],
 };
+
+const ttsProviders = [
+  {
+    id: "google",
+    name: "Google",
+    type: "tts" as const,
+    enabled: true,
+    created_at: "2026-04-03T09:00:00.000Z",
+  },
+];
 
 const llmModels = ["gpt-4o", "gpt-4.1-mini"];
 
@@ -90,17 +116,30 @@ function extractUrl(input: string | URL | Request): string {
   }
 
   if (input instanceof URL) {
-    return input.pathname;
+    return input.pathname + input.search;
   }
 
   return input.url;
 }
 
+function toDialogSummary(dialog: typeof generatedDialog) {
+  return {
+    id: dialog.id,
+    title: dialog.title,
+    description: dialog.description,
+    language: dialog.language,
+    created_by: dialog.created_by,
+    created_at: dialog.created_at,
+  };
+}
+
 describe("datasets queries", () => {
-  let dialogs = [existingDialog];
+  let dialogs = [createdDialog];
+  let prompts = [createdPrompt];
 
   beforeEach(() => {
-    dialogs = [existingDialog];
+    dialogs = [createdDialog];
+    prompts = [createdPrompt];
 
     vi.stubGlobal(
       "fetch",
@@ -119,7 +158,7 @@ describe("datasets queries", () => {
           };
 
           const nextDialog = {
-            ...existingDialog,
+            ...createdDialog,
             id: 7,
             title: payload.title,
             language: payload.language,
@@ -128,26 +167,44 @@ describe("datasets queries", () => {
           return jsonResponse(nextDialog, 201);
         }
 
+        if (url.endsWith("/api/annotation-prompts") && method === "GET") {
+          return jsonResponse(prompts);
+        }
+
+        if (url.endsWith("/api/annotation-prompts/7") && method === "GET") {
+          return jsonResponse(createdPrompt);
+        }
+
+        if (url.endsWith("/api/annotation-prompts") && method === "POST") {
+          const payload = JSON.parse(String(init?.body)) as {
+            title: string;
+            provider_id: string;
+            language: string;
+            prompt: string;
+          };
+
+          const nextPrompt = {
+            ...createdPrompt,
+            id: 8,
+            title: payload.title,
+            provider_id: payload.provider_id,
+            language: payload.language,
+            prompt: payload.prompt,
+          };
+          prompts = [...prompts, nextPrompt];
+          return jsonResponse(nextPrompt, 201);
+        }
+
+        if (url.endsWith("/api/providers?type=tts") && method === "GET") {
+          return jsonResponse(ttsProviders);
+        }
+
         if (url.endsWith("/api/llm/openai/models") && method === "GET") {
           return jsonResponse(llmModels);
         }
 
         if (url.endsWith("/api/services/generate-dialog") && method === "POST") {
-          dialogs = [
-            ...dialogs,
-            {
-              ...generatedDialog,
-              messages: undefined,
-            },
-          ].map((dialog) => ({
-            id: dialog.id,
-            title: dialog.title,
-            description: dialog.description,
-            language: dialog.language,
-            created_by: dialog.created_by,
-            created_at: dialog.created_at,
-          }));
-
+          dialogs = [...dialogs, toDialogSummary(generatedDialog)];
           return jsonResponse(generatedDialog, 201);
         }
 
@@ -217,6 +274,96 @@ describe("datasets queries", () => {
     expect(queryClient.getQueryData(dialogKeys.list())).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ title: "Fresh dialog" }),
+      ]),
+    );
+  });
+
+  it("fetches annotation prompts and prompt detail", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result: listResult } = renderHook(() => useAnnotationPrompts(), {
+      wrapper,
+    });
+    const { result: detailResult } = renderHook(() => useAnnotationPrompt(7), {
+      wrapper,
+    });
+
+    await waitFor(() => {
+      expect(listResult.current.isSuccess).toBe(true);
+      expect(detailResult.current.isSuccess).toBe(true);
+    });
+
+    expect(listResult.current.data).toEqual(prompts);
+    expect(detailResult.current.data).toEqual(createdPrompt);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/annotation-prompts",
+      expect.objectContaining({
+        method: "GET",
+      }),
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/annotation-prompts/7",
+      expect.objectContaining({
+        method: "GET",
+      }),
+    );
+  });
+
+  it("fetches TTS providers for prompt forms", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useTtsProviders(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(ttsProviders);
+    expect(queryClient.getQueryData(ttsProviderKeys.list())).toEqual(ttsProviders);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/providers?type=tts",
+      expect.objectContaining({
+        method: "GET",
+      }),
+    );
+  });
+
+  it("invalidates the annotation prompt list after creating a prompt", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result: promptsResult } = renderHook(() => useAnnotationPrompts(), {
+      wrapper,
+    });
+    const { result: mutationResult } = renderHook(
+      () => useCreateAnnotationPrompt(),
+      {
+        wrapper,
+      },
+    );
+
+    await waitFor(() => {
+      expect(promptsResult.current.isSuccess).toBe(true);
+    });
+
+    await act(async () => {
+      await mutationResult.current.mutateAsync({
+        title: "Fresh prompt",
+        provider_id: "google",
+        language: "en-US",
+        prompt: "Write pacing hints for each line.",
+      });
+    });
+
+    await waitFor(() => {
+      expect(queryClient.getQueryData(annotationPromptKeys.list())).toHaveLength(2);
+    });
+
+    expect(queryClient.getQueryData(annotationPromptKeys.list())).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: "Fresh prompt" }),
       ]),
     );
   });
