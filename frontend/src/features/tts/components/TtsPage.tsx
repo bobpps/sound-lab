@@ -1,7 +1,7 @@
 import { useState } from "react";
 import clsx from "clsx";
 import { api } from "../../../lib/api-client.ts";
-import type { AnnotatedMessage } from "../../../types/api.ts";
+import type { AnnotatedMessage, DialogMessage } from "../../../types/api.ts";
 import {
   useAnnotation,
   useAnnotations,
@@ -45,7 +45,7 @@ async function synthesize(
   return response.blob();
 }
 
-function buildPlaybackMessages(
+function buildAnnotatedPlaybackMessages(
   annotatedMessages: AnnotatedMessage[],
   dialogMessages: Array<{ id: number; character: 1 | 2 }>,
 ): PlaybackMessage[] {
@@ -60,26 +60,49 @@ function buildPlaybackMessages(
   }));
 }
 
+function buildOriginalPlaybackMessages(
+  dialogMessages: DialogMessage[],
+): PlaybackMessage[] {
+  return dialogMessages.map((m) => ({
+    id: m.id,
+    character: m.character,
+    text: m.text,
+  }));
+}
+
 export function TtsPage() {
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [selectedDialogId, setSelectedDialogId] = useState<number | null>(null);
-  const [selectedAnnotationId, setSelectedAnnotationId] = useState<number | null>(null);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<number | "original" | null>(null);
   const [voiceMap, setVoiceMap] = useState<VoiceMap>({});
 
   const providersQuery = useProviderList();
   const dialogsQuery = useDialogList();
   const voicesQuery = useTtsVoices(selectedProviderId);
   const annotationsQuery = useAnnotations(selectedDialogId);
-  const annotationQuery = useAnnotation(selectedAnnotationId);
+  const annotationQuery = useAnnotation(
+    typeof selectedAnnotationId === "number" ? selectedAnnotationId : null,
+  );
   const dialogDetailQuery = useDialogDetail(selectedDialogId);
 
+  const enabledProviders = providersQuery.data?.filter((p) => p.enabled);
+
+  const filteredAnnotations = annotationsQuery.data?.filter(
+    (a) => a.provider_id === selectedProviderId,
+  );
+
+  // "original" means no annotation selected — use raw dialog messages
+  const useOriginal = selectedAnnotationId === "original";
+
   const playbackMessages: PlaybackMessage[] =
-    annotationQuery.data?.messages && dialogDetailQuery.data?.messages
-      ? buildPlaybackMessages(
-          annotationQuery.data.messages,
-          dialogDetailQuery.data.messages,
-        )
-      : [];
+    useOriginal && dialogDetailQuery.data?.messages
+      ? buildOriginalPlaybackMessages(dialogDetailQuery.data.messages)
+      : annotationQuery.data?.messages && dialogDetailQuery.data?.messages
+        ? buildAnnotatedPlaybackMessages(
+            annotationQuery.data.messages,
+            dialogDetailQuery.data.messages,
+          )
+        : [];
 
   const playback = useAudioPlayback({
     providerId: selectedProviderId,
@@ -90,6 +113,7 @@ export function TtsPage() {
 
   function handleProviderChange(value: string) {
     setSelectedProviderId(value || null);
+    setSelectedDialogId(null);
     setSelectedAnnotationId(null);
     setVoiceMap({});
     playback.stop();
@@ -103,8 +127,12 @@ export function TtsPage() {
   }
 
   function handleAnnotationChange(value: string) {
-    const id = Number(value);
-    setSelectedAnnotationId(Number.isNaN(id) ? null : id);
+    if (value === "original") {
+      setSelectedAnnotationId("original");
+    } else {
+      const id = Number(value);
+      setSelectedAnnotationId(Number.isNaN(id) ? null : id);
+    }
     playback.stop();
   }
 
@@ -131,7 +159,7 @@ export function TtsPage() {
               onChange={(e) => handleProviderChange(e.target.value)}
             >
               <option value="">Select a provider...</option>
-              {providersQuery.data?.map((p) => (
+              {enabledProviders?.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
@@ -167,7 +195,8 @@ export function TtsPage() {
               disabled={!selectedDialogId}
             >
               <option value="">Select an annotation...</option>
-              {annotationsQuery.data?.map((a) => (
+              <option value="original">Original (no annotation)</option>
+              {filteredAnnotations?.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.title}
                 </option>
@@ -177,8 +206,8 @@ export function TtsPage() {
         </div>
       </div>
 
-      {/* Voice Assignment -- shown when provider + annotation are selected */}
-      {selectedProviderId && selectedAnnotationId && (
+      {/* Voice Assignment -- shown when provider + annotation/original are selected */}
+      {selectedProviderId && selectedAnnotationId !== null && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900">
             Voice Assignment
@@ -200,8 +229,8 @@ export function TtsPage() {
         </div>
       )}
 
-      {/* Messages + Playback -- shown when annotation is loaded */}
-      {annotationQuery.data?.messages && annotationQuery.data.messages.length > 0 && (
+      {/* Messages + Playback -- shown when messages are available */}
+      {playbackMessages.length > 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <h2 className="text-lg font-semibold text-gray-900">

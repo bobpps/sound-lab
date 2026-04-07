@@ -7,6 +7,7 @@ import { TtsPage } from "./TtsPage.tsx";
 const ttsProviders = [
   { id: "google", name: "Google", type: "tts" as const, enabled: true, created_at: "2026-04-03T09:00:00.000Z" },
   { id: "elevenlabs", name: "ElevenLabs", type: "tts" as const, enabled: true, created_at: "2026-04-03T09:00:00.000Z" },
+  { id: "disabled-provider", name: "Disabled TTS", type: "tts" as const, enabled: false, created_at: "2026-04-03T09:00:00.000Z" },
 ];
 
 const dialogs = [
@@ -15,6 +16,7 @@ const dialogs = [
 
 const annotations = [
   { id: 1, dialog_id: 10, provider_id: "google", title: "Narration v1", created_by: null, created_at: "2026-04-03T10:00:00.000Z" },
+  { id: 2, dialog_id: 10, provider_id: "elevenlabs", title: "EL annotation", created_by: null, created_at: "2026-04-03T10:00:00.000Z" },
 ];
 
 const annotationWithMessages = {
@@ -187,5 +189,98 @@ describe("TtsPage", () => {
     });
 
     expect(screen.getByRole("button", { name: /run/i })).toBeDisabled();
+  });
+
+  it("does not show disabled providers", async () => {
+    renderWithProviders(<TtsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("option", { name: "Disabled TTS" })).not.toBeInTheDocument();
+  });
+
+  it("resets dialog and annotation when provider changes", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<TtsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Greeting dialog" })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText(/dialog/i), "10");
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Narration v1" })).toBeInTheDocument();
+    });
+
+    // Switch provider — dialog and annotation should reset
+    await user.selectOptions(screen.getByLabelText(/provider/i), "elevenlabs");
+
+    expect(screen.getByLabelText(/dialog/i)).toHaveValue("");
+    expect(screen.getByLabelText(/annotation/i)).toHaveValue("");
+  });
+
+  it("filters annotations by selected provider", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<TtsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Greeting dialog" })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText(/dialog/i), "10");
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Narration v1" })).toBeInTheDocument();
+    });
+
+    // Google is selected — should see Google annotation but not ElevenLabs annotation
+    expect(screen.getByRole("option", { name: "Narration v1" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "EL annotation" })).not.toBeInTheDocument();
+  });
+
+  it("shows original dialog lines when 'Original' is selected", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<TtsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Google" })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText(/provider/i), "google");
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Greeting dialog" })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText(/dialog/i), "10");
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: /original/i })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText(/annotation/i), "original");
+
+    await waitFor(() => {
+      expect(screen.getByText("Hello there.")).toBeInTheDocument();
+      expect(screen.getByText("Hi, how are you?")).toBeInTheDocument();
+    });
+
+    // Voice assignment should also be visible
+    expect(screen.getByLabelText("Character 1 voice")).toBeInTheDocument();
   });
 });
