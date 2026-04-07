@@ -10,6 +10,8 @@ import {
   useTtsVoices,
   useDialogs,
   useAnnotationsByDialog,
+  useAnnotation,
+  useDialogDetail,
 } from "./queries.ts";
 
 const providers = [
@@ -60,6 +62,26 @@ const annotations = [
   },
 ];
 
+const annotationWithMessages = {
+  id: 10,
+  dialog_id: 1,
+  provider_id: "openai",
+  title: "Formal annotation",
+  created_by: null,
+  created_at: "2026-04-02T10:00:00.000Z",
+  messages: [
+    { id: 100, annotated_dialog_id: 10, dialog_message_id: 50, text: "Hello there." },
+    { id: 101, annotated_dialog_id: 10, dialog_message_id: 51, text: "Hi, how are you?" },
+  ],
+};
+
+const dialogWithMessages = {
+  ...dialogs[0],
+  messages: [
+    { id: 50, dialog_id: 1, order: 1, character: 1 as const, text: "Hello." },
+  ],
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -94,6 +116,14 @@ describe("tts queries", () => {
 
         if (url.endsWith("/api/dialogs/1/annotations")) {
           return jsonResponse(annotations);
+        }
+
+        if (url.endsWith("/api/annotations/10")) {
+          return jsonResponse(annotationWithMessages);
+        }
+
+        if (url.endsWith("/api/dialogs/1") && !url.includes("annotations")) {
+          return jsonResponse(dialogWithMessages);
         }
 
         return jsonResponse({ message: "Not Found" }, 404);
@@ -206,5 +236,52 @@ describe("tts queries", () => {
     ]);
     expect(ttsKeys.dialogs()).toEqual(["tts", "dialogs"]);
     expect(ttsKeys.annotations(1)).toEqual(["tts", "annotations", 1]);
+    expect(ttsKeys.annotation(10)).toEqual(["tts", "annotation", 10]);
+    expect(ttsKeys.dialogDetail(1)).toEqual(["tts", "dialog-detail", 1]);
+  });
+
+  it("fetches a single annotation with messages", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useAnnotation(10), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(annotationWithMessages);
+    expect(result.current.data?.messages).toHaveLength(2);
+  });
+
+  it("disables annotation query when annotationId is null", () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useAnnotation(null), { wrapper });
+
+    expect(result.current.fetchStatus).toBe("idle");
+  });
+
+  it("fetches dialog detail with messages", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useDialogDetail(1), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data?.messages).toHaveLength(1);
+  });
+
+  it("disables dialog detail query when dialogId is null", () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useDialogDetail(null), { wrapper });
+
+    expect(result.current.fetchStatus).toBe("idle");
   });
 });

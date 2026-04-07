@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "../../../test-utils.tsx";
@@ -36,6 +36,27 @@ const annotations = [
   },
 ];
 
+const annotationWithMessages = {
+  ...annotations[0],
+  messages: [
+    { id: 100, annotated_dialog_id: 10, dialog_message_id: 50, text: "Hello there." },
+    { id: 101, annotated_dialog_id: 10, dialog_message_id: 51, text: "Hi, how are you?" },
+  ],
+};
+
+const dialogWithMessages = {
+  ...dialogs[0],
+  messages: [
+    { id: 50, dialog_id: 1, order: 1, character: 1 as const, text: "Hello there." },
+    { id: 51, dialog_id: 1, order: 2, character: 2 as const, text: "Hi, how are you?" },
+  ],
+};
+
+const voices = [
+  { id: "voice-1", name: "Alice", language: "en-US", gender: "female" },
+  { id: "voice-2", name: "Bob", language: "en-US", gender: "male" },
+];
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -66,6 +87,18 @@ describe("TtsPage", () => {
 
         if (url.endsWith("/api/dialogs/1/annotations")) {
           return jsonResponse(annotations);
+        }
+
+        if (url.endsWith("/api/annotations/10")) {
+          return jsonResponse(annotationWithMessages);
+        }
+
+        if (url.endsWith("/api/dialogs/1") && !url.includes("annotations")) {
+          return jsonResponse(dialogWithMessages);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/voices")) {
+          return jsonResponse(voices);
         }
 
         return jsonResponse({ message: "Not Found" }, 404);
@@ -268,5 +301,85 @@ describe("TtsPage", () => {
       name: "Annotation Variant",
     });
     expect(newAnnotationSelect).toHaveValue("clean");
+  });
+
+  it("shows voice assignment after selecting provider and dialog", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<TtsPage />);
+
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
+    });
+    await user.selectOptions(providerSelect, "elevenlabs");
+
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
+    });
+    await user.selectOptions(dialogSelect, "1");
+
+    // Voice assignment should appear (voices load for the selected provider)
+    expect(
+      await screen.findByLabelText("Character 1 voice"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Character 2 voice")).toBeInTheDocument();
+  });
+
+  it("shows dialog lines and Run button with clean (no annotation) selection", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<TtsPage />);
+
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
+    });
+    await user.selectOptions(providerSelect, "elevenlabs");
+
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
+    });
+    await user.selectOptions(dialogSelect, "1");
+
+    // Default is "Clean (no annotation)" — original dialog messages should show
+    await waitFor(() => {
+      expect(screen.getByText("Hello there.")).toBeInTheDocument();
+      expect(screen.getByText("Hi, how are you?")).toBeInTheDocument();
+    });
+
+    // Run button should be present but disabled (no voices assigned)
+    expect(
+      screen.getByRole("button", { name: /run/i }),
+    ).toBeDisabled();
+  });
+
+  it("shows Run button disabled until voices are assigned", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<TtsPage />);
+
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
+    });
+    await user.selectOptions(providerSelect, "elevenlabs");
+
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
+    });
+    await user.selectOptions(dialogSelect, "1");
+
+    // Select a specific annotation
+    const annotationSelect = await screen.findByRole("combobox", {
+      name: "Annotation Variant",
+    });
+    await user.selectOptions(annotationSelect, "10");
+
+    // Wait for messages to load
+    await waitFor(() => {
+      expect(screen.getByText("Hello there.")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole("button", { name: /run/i }),
+    ).toBeDisabled();
   });
 });

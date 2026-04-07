@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api-client.ts";
 import type {
   AnnotatedDialog,
+  AnnotatedDialogWithMessages,
   Dialog,
+  DialogWithMessages,
   Provider,
   Voice,
 } from "../../../types/api.ts";
@@ -12,6 +14,10 @@ export const ttsKeys = {
   voices: (providerId: string) => ["tts", "voices", providerId] as const,
   dialogs: () => ["tts", "dialogs"] as const,
   annotations: (dialogId: number) => ["tts", "annotations", dialogId] as const,
+  annotation: (annotationId: number) =>
+    ["tts", "annotation", annotationId] as const,
+  dialogDetail: (dialogId: number) =>
+    ["tts", "dialog-detail", dialogId] as const,
 };
 
 export function useTtsProviders() {
@@ -41,6 +47,23 @@ export function useAnnotationsByDialog(dialogId: number | null) {
     queryKey: ttsKeys.annotations(dialogId ?? 0),
     queryFn: () =>
       api.get<AnnotatedDialog[]>(`/dialogs/${dialogId}/annotations`),
+    enabled: dialogId !== null,
+  });
+}
+
+export function useAnnotation(annotationId: number | null) {
+  return useQuery({
+    queryKey: ttsKeys.annotation(annotationId ?? 0),
+    queryFn: () =>
+      api.get<AnnotatedDialogWithMessages>(`/annotations/${annotationId}`),
+    enabled: annotationId !== null,
+  });
+}
+
+export function useDialogDetail(dialogId: number | null) {
+  return useQuery({
+    queryKey: ttsKeys.dialogDetail(dialogId ?? 0),
+    queryFn: () => api.get<DialogWithMessages>(`/dialogs/${dialogId}`),
     enabled: dialogId !== null,
   });
 }
