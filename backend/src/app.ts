@@ -5,9 +5,11 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import autoload from '@fastify/autoload';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
+import websocket from '@fastify/websocket';
 import dbPlugin from './plugins/db.js';
 import ttsPlugin from './plugins/tts.js';
 import llmPlugin from './plugins/llm.js';
+import realtimePlugin from './plugins/realtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -25,10 +27,12 @@ export async function buildApp(opts: AppOptions = {}) {
   });
 
   await app.register(sensible);
+  await app.register(websocket);
 
   await app.register(dbPlugin, { testing: opts.testing });
   await app.register(ttsPlugin);
   await app.register(llmPlugin);
+  await app.register(realtimePlugin);
 
   await app.register(autoload, {
     dir: join(__dirname, 'routes'),
