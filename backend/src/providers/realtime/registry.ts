@@ -1,8 +1,11 @@
 import type { IRealtimeProvider } from './types.js';
+import { InworldRealtimeProvider } from './inworld.js';
 
 export type RealtimeProviderConstructor = new (apiKey: string) => IRealtimeProvider;
 
-const PROVIDERS: Record<string, RealtimeProviderConstructor> = {};
+const PROVIDERS: Record<string, RealtimeProviderConstructor> = {
+  'inworld-realtime': InworldRealtimeProvider,
+};
 
 export function createRealtimeProvider(providerId: string, apiKey: string): IRealtimeProvider {
   const Provider = PROVIDERS[providerId];

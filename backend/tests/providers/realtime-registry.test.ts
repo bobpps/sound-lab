@@ -3,6 +3,7 @@ import {
   getSupportedRealtimeProviders,
   registerRealtimeProvider,
 } from '../../src/providers/realtime/registry.js';
+import { InworldRealtimeProvider } from '../../src/providers/realtime/inworld.js';
 import type {
   IRealtimeProvider,
   IRealtimeSession,
@@ -53,5 +54,12 @@ describe('Realtime Provider Registry', () => {
     const providers = getSupportedRealtimeProviders();
 
     expect(providers).toContain(providerId);
+  });
+
+  it('creates the built-in Inworld realtime provider', () => {
+    const provider = createRealtimeProvider('inworld-realtime', 'test-key');
+
+    expect(provider).toBeInstanceOf(InworldRealtimeProvider);
+    expect(provider.id).toBe('inworld-realtime');
   });
 });
