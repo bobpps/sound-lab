@@ -13,6 +13,7 @@ const INWORLD_REALTIME_URL = 'wss://api.inworld.ai/api/v1/realtime/session';
 const DEFAULT_REALTIME_MODEL = 'google-ai-studio/gemini-2.5-flash';
 const DEFAULT_VOICE = 'Dennis';
 const DEFAULT_TTS_MODEL = 'inworld-tts-1.5-mini';
+const STARTUP_TIMEOUT_MS = 10_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -304,6 +305,13 @@ export class InworldRealtimeProvider implements IRealtimeProvider {
     };
 
     return new Promise<IRealtimeSession>((resolve, reject) => {
+      const startupTimer = setTimeout(() => {
+        failStartup(
+          `Inworld Realtime session startup timed out after ${STARTUP_TIMEOUT_MS}ms`,
+        );
+      }, STARTUP_TIMEOUT_MS);
+      startupTimer.unref?.();
+
       const settleStartup = (
         kind: 'resolve' | 'reject',
         payload: IRealtimeSession | Error,
@@ -313,6 +321,7 @@ export class InworldRealtimeProvider implements IRealtimeProvider {
         }
 
         startupSettled = true;
+        clearTimeout(startupTimer);
 
         if (kind === 'resolve') {
           resolve(payload as IRealtimeSession);

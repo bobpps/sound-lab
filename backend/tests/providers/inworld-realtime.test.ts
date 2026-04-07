@@ -111,6 +111,7 @@ describe('InworldRealtimeProvider', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -385,6 +386,40 @@ describe('InworldRealtimeProvider', () => {
       },
     });
     expect(socket.close).toHaveBeenCalledWith(1011, 'Invalid model');
+  });
+
+  it('rejects startup when Inworld does not finish the session handshake in time', async () => {
+    vi.useFakeTimers();
+
+    const onEvent = vi.fn<(event: RealtimeEvent) => void>();
+    const sessionPromise = provider.createSession(
+      {
+        model: 'openai/gpt-4.1-nano',
+        systemPrompt: 'Be concise',
+      },
+      onEvent,
+    );
+
+    const socket = mockSocketInstances[0] as {
+      close: ReturnType<typeof vi.fn>;
+      open(): void;
+    };
+
+    socket.open();
+    const rejection = expect(sessionPromise).rejects.toThrow(
+      'Inworld Realtime session startup timed out after 10000ms',
+    );
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await rejection;
+    expect(socket.close).toHaveBeenCalledWith(
+      1011,
+      'Inworld Realtime session startup timed out after 10000ms',
+    );
+    expect(onEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'session_end' }),
+    );
   });
 
   it('does not emit session_end when the session is closed intentionally', async () => {
