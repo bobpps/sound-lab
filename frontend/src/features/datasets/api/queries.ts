@@ -33,10 +33,30 @@ export interface UpdateMessageInput {
   text?: string;
 }
 
+export interface GenerateDialogInput {
+  providerId: string;
+  model: string;
+  language: string;
+  prompt: string;
+  messageCount: number;
+}
+
+export interface EditDialogInput {
+  dialogId: number;
+  providerId: string;
+  model: string;
+  instructions: string;
+}
+
 export const dialogKeys = {
   all: ["dialogs"] as const,
   list: () => [...dialogKeys.all, "list"] as const,
   detail: (dialogId: number) => [...dialogKeys.all, "detail", dialogId] as const,
+};
+
+export const llmKeys = {
+  all: ["llm"] as const,
+  models: (providerId: string) => [...llmKeys.all, "models", providerId] as const,
 };
 
 async function fetchDialogs(): Promise<Dialog[]> {
@@ -59,6 +79,14 @@ export function useDialog(dialogId: number | null) {
     queryKey: dialogKeys.detail(dialogId ?? 0),
     queryFn: () => fetchDialog(dialogId!),
     enabled: dialogId !== null,
+  });
+}
+
+export function useLlmModels(providerId: string | null) {
+  return useQuery({
+    queryKey: llmKeys.models(providerId ?? ""),
+    queryFn: () => api.get<string[]>(`/llm/${providerId}/models`),
+    enabled: providerId !== null && providerId.length > 0,
   });
 }
 
@@ -164,6 +192,34 @@ export function useDeleteMessage() {
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({
         queryKey: dialogKeys.detail(variables.dialogId),
+      });
+    },
+  });
+}
+
+export function useGenerateDialog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: GenerateDialogInput) =>
+      api.post<DialogWithMessages>("/services/generate-dialog", input),
+    onSuccess: async (dialog) => {
+      queryClient.setQueryData(dialogKeys.detail(dialog.id), dialog);
+      await queryClient.invalidateQueries({ queryKey: dialogKeys.list() });
+    },
+  });
+}
+
+export function useEditDialog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: EditDialogInput) =>
+      api.post<DialogWithMessages>("/services/edit-dialog", input),
+    onSuccess: async (dialog) => {
+      queryClient.setQueryData(dialogKeys.detail(dialog.id), dialog);
+      await queryClient.invalidateQueries({
+        queryKey: dialogKeys.detail(dialog.id),
       });
     },
   });

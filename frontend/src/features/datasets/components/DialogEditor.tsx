@@ -10,6 +10,10 @@ import {
   useUpdateMessage,
 } from "../api/queries.ts";
 import { MessageEditor, type EditableMessage } from "./MessageEditor.tsx";
+import {
+  LlmActionDialog,
+  type LlmActionMode,
+} from "./LlmActionDialog.tsx";
 
 function toEditableMessage(message: DialogMessage): EditableMessage {
   return {
@@ -64,6 +68,7 @@ export function DialogEditor() {
   const [messages, setMessages] = useState<EditableMessage[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [formNotice, setFormNotice] = useState<string | null>(null);
+  const [llmActionMode, setLlmActionMode] = useState<LlmActionMode | null>(null);
 
   function hydrateDialog(dialog: DialogWithMessages) {
     setTitle(dialog.title);
@@ -217,6 +222,19 @@ export function DialogEditor() {
     }
   }
 
+  async function handleGenerateSuccess(dialog: DialogWithMessages) {
+    setLlmActionMode(null);
+    navigate(`/datasets/dialogs/${dialog.id}`);
+  }
+
+  async function handleEditWithLlmSuccess(dialog: DialogWithMessages) {
+    hydrateDialog(dialog);
+    hydratedDialogIdRef.current = dialog.id;
+    setFormNotice("Dialog updated with LLM.");
+    setLlmActionMode(null);
+    await dialogQuery.refetch();
+  }
+
   const isSaving =
     updateDialog.isPending ||
     deleteDialog.isPending ||
@@ -291,6 +309,22 @@ export function DialogEditor() {
         </div>
 
         <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => setLlmActionMode("generate")}
+            disabled={isSaving}
+          >
+            Generate
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => setLlmActionMode("edit")}
+            disabled={isSaving}
+          >
+            Edit with LLM
+          </button>
           <button
             type="button"
             className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -434,6 +468,21 @@ export function DialogEditor() {
           </div>
         </aside>
       </section>
+
+      {llmActionMode ? (
+        <LlmActionDialog
+          mode={llmActionMode}
+          dialogId={dialogId}
+          initialLanguage={language || dialogQuery.data.language}
+          initialMessageCount={Math.max(messages.length, 2)}
+          onClose={() => setLlmActionMode(null)}
+          onSuccess={
+            llmActionMode === "generate"
+              ? handleGenerateSuccess
+              : handleEditWithLlmSuccess
+          }
+        />
+      ) : null}
     </div>
   );
 }
