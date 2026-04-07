@@ -2,6 +2,7 @@ import { createTTSProvider, getSupportedTTSProviders } from '../../src/providers
 import { ElevenLabsTTSProvider } from '../../src/providers/tts/elevenlabs.js';
 import { GoogleTTSProvider } from '../../src/providers/tts/google.js';
 import { InworldTTSProvider } from '../../src/providers/tts/inworld.js';
+import { GeminiTTSProvider } from '../../src/providers/tts/gemini.js';
 
 // Mock Google TTS client so GoogleTTSProvider constructor doesn't need real credentials
 vi.mock('@google-cloud/text-to-speech', () => ({
@@ -43,6 +44,13 @@ describe('TTS Provider Registry', () => {
       expect(provider.id).toBe('inworld');
     });
 
+    it('returns GeminiTTSProvider for "gemini-tts"', () => {
+      const provider = createTTSProvider('gemini-tts', 'test-key');
+
+      expect(provider).toBeInstanceOf(GeminiTTSProvider);
+      expect(provider.id).toBe('gemini-tts');
+    });
+
     it('throws for unsupported provider ID', () => {
       expect(() => createTTSProvider('unknown', 'key')).toThrow(
         'Unsupported TTS provider: unknown',
@@ -57,7 +65,8 @@ describe('TTS Provider Registry', () => {
       expect(providers).toContain('elevenlabs');
       expect(providers).toContain('google');
       expect(providers).toContain('inworld');
-      expect(providers).toHaveLength(3);
+      expect(providers).toContain('gemini-tts');
+      expect(providers).toHaveLength(4);
     });
   });
 });
