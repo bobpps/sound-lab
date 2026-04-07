@@ -1,4 +1,5 @@
 import type { IRealtimeProvider } from './types.js';
+import { InworldRealtimeProvider } from './inworld.js';
 import { ElevenLabsRealtimeProvider } from './elevenlabs.js';
 import { GeminiRealtimeProvider } from './gemini.js';
 
@@ -29,3 +30,4 @@ export function getSupportedRealtimeProviders(): string[] {
 
 registerRealtimeProvider('elevenlabs-realtime', ElevenLabsRealtimeProvider);
 registerRealtimeProvider('gemini-realtime', GeminiRealtimeProvider);
+registerRealtimeProvider('inworld-realtime', InworldRealtimeProvider);

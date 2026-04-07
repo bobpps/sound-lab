@@ -3,6 +3,7 @@ import {
   getSupportedRealtimeProviders,
   registerRealtimeProvider,
 } from '../../src/providers/realtime/registry.js';
+import { InworldRealtimeProvider } from '../../src/providers/realtime/inworld.js';
 import { ElevenLabsRealtimeProvider } from '../../src/providers/realtime/elevenlabs.js';
 import { GeminiRealtimeProvider } from '../../src/providers/realtime/gemini.js';
 import type {
@@ -70,6 +71,14 @@ describe('Realtime Provider Registry', () => {
 
     expect(providers).toContain('gemini-realtime');
     expect(providers).toContain('elevenlabs-realtime');
+    expect(providers).toContain('inworld-realtime');
     expect(providers).toContain(providerId);
+  });
+
+  it('creates the built-in Inworld realtime provider', () => {
+    const provider = createRealtimeProvider('inworld-realtime', 'test-key');
+
+    expect(provider).toBeInstanceOf(InworldRealtimeProvider);
+    expect(provider.id).toBe('inworld-realtime');
   });
 });
