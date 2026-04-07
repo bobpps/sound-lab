@@ -4,6 +4,8 @@ import {
   registerRealtimeProvider,
 } from '../../src/providers/realtime/registry.js';
 import { InworldRealtimeProvider } from '../../src/providers/realtime/inworld.js';
+import { ElevenLabsRealtimeProvider } from '../../src/providers/realtime/elevenlabs.js';
+import { GeminiRealtimeProvider } from '../../src/providers/realtime/gemini.js';
 import type {
   IRealtimeProvider,
   IRealtimeSession,
@@ -35,6 +37,20 @@ class TestRealtimeProvider implements IRealtimeProvider {
 describe('Realtime Provider Registry', () => {
   const providerId = `test-realtime-${Math.random().toString(36).slice(2)}`;
 
+  it('creates the built-in Gemini realtime provider', () => {
+    const provider = createRealtimeProvider('gemini-realtime', 'test-key');
+
+    expect(provider).toBeInstanceOf(GeminiRealtimeProvider);
+    expect(provider.id).toBe('gemini-realtime');
+  });
+
+  it('returns the built-in ElevenLabs realtime provider', () => {
+    const provider = createRealtimeProvider('elevenlabs-realtime', 'test-key');
+
+    expect(provider).toBeInstanceOf(ElevenLabsRealtimeProvider);
+    expect(provider.id).toBe('elevenlabs-realtime');
+  });
+
   it('returns a registered realtime provider', () => {
     registerRealtimeProvider(providerId, TestRealtimeProvider);
 
@@ -53,6 +69,9 @@ describe('Realtime Provider Registry', () => {
   it('includes registered providers in the supported list', () => {
     const providers = getSupportedRealtimeProviders();
 
+    expect(providers).toContain('gemini-realtime');
+    expect(providers).toContain('elevenlabs-realtime');
+    expect(providers).toContain('inworld-realtime');
     expect(providers).toContain(providerId);
   });
 
