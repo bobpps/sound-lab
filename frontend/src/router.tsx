@@ -3,8 +3,8 @@ import { AppLayout } from "./components/layout/AppLayout.tsx";
 import { DatasetsPage } from "./features/datasets/components/DatasetsPage.tsx";
 import { DialogEditor } from "./features/datasets/components/DialogEditor.tsx";
 import { PromptEditor } from "./features/datasets/components/PromptEditor.tsx";
+import { RealtimePage } from "./features/realtime/components/RealtimePage.tsx";
 import { TtsPage } from "./features/tts/components/TtsPage.tsx";
-import { RealtimePage } from "./pages/RealtimePage.tsx";
 import { ProvidersPage } from "./pages/ProvidersPage.tsx";
 
 export function AppRouteTree() {
