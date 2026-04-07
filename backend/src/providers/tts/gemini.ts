@@ -13,6 +13,11 @@ const VOICE_NAMES = [
   'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat',
 ] as const;
 
+/** Capitalize first letter: 'kore' → 'Kore'. Gemini API requires original casing. */
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
 function buildStaticVoices(): IVoice[] {
   return VOICE_NAMES.map((name) => ({
     id: name.toLowerCase(),
@@ -72,7 +77,7 @@ export class GeminiTTSProvider implements ITTSProvider {
           responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: opts.voiceId },
+              prebuiltVoiceConfig: { voiceName: capitalize(opts.voiceId) },
             },
           },
         },

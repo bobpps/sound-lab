@@ -142,7 +142,7 @@ describe('GeminiTTSProvider', () => {
           responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'kore' },
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
             },
           },
         },

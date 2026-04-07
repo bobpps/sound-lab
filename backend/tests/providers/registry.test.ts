@@ -2,6 +2,7 @@ import { createTTSProvider, getSupportedTTSProviders } from '../../src/providers
 import { ElevenLabsTTSProvider } from '../../src/providers/tts/elevenlabs.js';
 import { GoogleTTSProvider } from '../../src/providers/tts/google.js';
 import { InworldTTSProvider } from '../../src/providers/tts/inworld.js';
+import { OpenAITTSProvider } from '../../src/providers/tts/openai.js';
 import { GeminiTTSProvider } from '../../src/providers/tts/gemini.js';
 
 // Mock Google TTS client so GoogleTTSProvider constructor doesn't need real credentials
@@ -44,6 +45,13 @@ describe('TTS Provider Registry', () => {
       expect(provider.id).toBe('inworld');
     });
 
+    it('returns OpenAITTSProvider for "openai-tts"', () => {
+      const provider = createTTSProvider('openai-tts', 'test-key');
+
+      expect(provider).toBeInstanceOf(OpenAITTSProvider);
+      expect(provider.id).toBe('openai-tts');
+    });
+
     it('returns GeminiTTSProvider for "gemini-tts"', () => {
       const provider = createTTSProvider('gemini-tts', 'test-key');
 
@@ -65,8 +73,9 @@ describe('TTS Provider Registry', () => {
       expect(providers).toContain('elevenlabs');
       expect(providers).toContain('google');
       expect(providers).toContain('inworld');
+      expect(providers).toContain('openai-tts');
       expect(providers).toContain('gemini-tts');
-      expect(providers).toHaveLength(4);
+      expect(providers).toHaveLength(5);
     });
   });
 });

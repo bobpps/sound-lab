@@ -23,5 +23,6 @@ export const SynthesizeBody = Type.Object({
   temperature: Type.Optional(Type.Number()),
   format: Type.Optional(Type.String()),
   sampleRate: Type.Optional(Type.Number()),
+  model: Type.Optional(Type.String()),
 }, { additionalProperties: false });
 export type SynthesizeBody = Static<typeof SynthesizeBody>;

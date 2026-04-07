@@ -102,7 +102,8 @@ describe('TTS routes', () => {
   describe('POST /tts/:providerId/synthesize', () => {
     it('returns audio buffer with correct content-type', async () => {
       await seedTTSProvider();
-      const audioBuffer = Buffer.from('fake-audio-data');
+      // ID3 header so sniffAudioMime detects MP3
+      const audioBuffer = Buffer.from('ID3fake-audio-data');
       mockSynthesize.mockResolvedValueOnce(audioBuffer);
 
       const res = await app.inject({
