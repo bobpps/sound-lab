@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DialogList } from "./DialogList.tsx";
+import { PromptList } from "./PromptList.tsx";
 
 type DatasetTab = "dialogs" | "prompts";
 
@@ -45,17 +46,7 @@ export function DatasetsPage() {
         </div>
       </div>
 
-      {activeTab === "dialogs" ? (
-        <DialogList />
-      ) : (
-        <section className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900">Prompts</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Prompt management lands in the next task. The tab is already wired
-            so the page structure stays stable.
-          </p>
-        </section>
-      )}
+      {activeTab === "dialogs" ? <DialogList /> : <PromptList />}
     </div>
   );
 }

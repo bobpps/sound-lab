@@ -36,6 +36,18 @@ const dialogDetailResponse = {
   ],
 };
 
+const promptsResponse = [
+  {
+    id: 1,
+    title: "Narration prompt",
+    provider_id: "google",
+    language: "en-US",
+    prompt: "Annotate this dialog for narration pacing.",
+    created_by: null,
+    created_at: "2026-04-06T18:30:00.000Z",
+  },
+];
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -91,8 +103,24 @@ beforeEach(() => {
         return jsonResponse(dialogDetailResponse);
       }
 
+      if (url.endsWith("/api/annotation-prompts")) {
+        return jsonResponse(promptsResponse);
+      }
+
+      if (url.endsWith("/api/annotation-prompts/1")) {
+        return jsonResponse(promptsResponse[0]);
+      }
+
       if (url.includes("/api/providers?type=")) {
-        return jsonResponse([]);
+        return jsonResponse([
+          {
+            id: "google",
+            name: "Google",
+            type: "tts",
+            enabled: true,
+            created_at: "2026-04-06T17:00:00.000Z",
+          },
+        ]);
       }
 
       return jsonResponse(
@@ -136,6 +164,15 @@ describe("Router", () => {
         await screen.findByRole("heading", { name: "Dialog Editor" }),
       ).toBeInTheDocument();
       expect(screen.getByDisplayValue("Greeting practice")).toBeInTheDocument();
+    });
+
+    it("renders Prompt Editor page at /datasets/prompts/:promptId", async () => {
+      renderWithRouter(["/datasets/prompts/1"]);
+
+      expect(
+        await screen.findByRole("heading", { name: "Prompt Editor" }),
+      ).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Narration prompt")).toBeInTheDocument();
     });
 
     it("renders TTS Testing page at /tts", () => {
