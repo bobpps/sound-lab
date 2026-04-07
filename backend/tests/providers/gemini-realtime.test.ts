@@ -113,6 +113,7 @@ describe('GeminiRealtimeProvider', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it('has the expected id and name', () => {
@@ -143,7 +144,6 @@ describe('GeminiRealtimeProvider', () => {
     }));
 
     await expect(provider.getModels()).resolves.toEqual([
-      'gemini-2.5-flash-live-preview',
       'gemini-3.1-flash-live-preview',
     ]);
 
@@ -211,6 +211,36 @@ describe('GeminiRealtimeProvider', () => {
       },
     });
     expect(onEvent).not.toHaveBeenCalled();
+  });
+
+  it('closes the socket when startup setup send fails', async () => {
+    const onEvent = vi.fn<(event: RealtimeEvent) => void>();
+    const sessionPromise = provider.createSession(
+      {
+        model: 'gemini-3.1-flash-live-preview',
+        systemPrompt: 'Be concise',
+      },
+      onEvent,
+    );
+
+    const socket = mockSocketInstances[0] as {
+      send: ReturnType<typeof vi.fn>;
+      close: ReturnType<typeof vi.fn>;
+      open(): void;
+    };
+
+    socket.send.mockImplementationOnce((_data: string, callback?: (error?: Error) => void) => {
+      callback?.(new Error('setup failed'));
+      return true;
+    });
+
+    socket.open();
+
+    await expect(sessionPromise).rejects.toThrow('setup failed');
+    expect(socket.close).toHaveBeenCalledWith(1011, 'setup failed');
+    expect(onEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'session_end' }),
+    );
   });
 
   it('maps Gemini server messages into RealtimeEvent payloads', async () => {
@@ -318,6 +348,42 @@ describe('GeminiRealtimeProvider', () => {
     ]);
   });
 
+  it('reports goAway with a stable message and preserves timeLeft metadata', async () => {
+    const onEvent = vi.fn<(event: RealtimeEvent) => void>();
+    const sessionPromise = provider.createSession(
+      {
+        model: 'gemini-3.1-flash-live-preview',
+        systemPrompt: 'Be helpful',
+      },
+      onEvent,
+    );
+
+    const socket = mockSocketInstances[0] as {
+      open(): void;
+      emitMessage(message: unknown): void;
+    };
+
+    socket.open();
+    socket.emitMessage({ setupComplete: {} });
+
+    await sessionPromise;
+
+    socket.emitMessage({
+      goAway: {
+        timeLeft: '10s',
+      },
+    });
+
+    expect(onEvent).toHaveBeenCalledWith({
+      type: 'error',
+      data: {
+        message: 'Gemini Live API requested session shutdown',
+        source: 'gemini',
+        timeLeft: '10s',
+      },
+    });
+  });
+
   it('rejects startup if Gemini closes the socket before setup completes', async () => {
     const onEvent = vi.fn<(event: RealtimeEvent) => void>();
     const sessionPromise = provider.createSession(
@@ -374,5 +440,39 @@ describe('GeminiRealtimeProvider', () => {
     expect(onEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'session_end' }),
     );
+  });
+
+  it('resolves close() after a timeout if the socket never emits close', async () => {
+    vi.useFakeTimers();
+
+    const onEvent = vi.fn<(event: RealtimeEvent) => void>();
+    const sessionPromise = provider.createSession(
+      {
+        model: 'gemini-3.1-flash-live-preview',
+        systemPrompt: 'Be concise',
+      },
+      onEvent,
+    );
+
+    const socket = mockSocketInstances[0] as {
+      readyState: number;
+      send: ReturnType<typeof vi.fn>;
+      close: ReturnType<typeof vi.fn>;
+      open(): void;
+      emitMessage(message: unknown): void;
+    };
+
+    socket.open();
+    socket.emitMessage({ setupComplete: {} });
+
+    const session = await sessionPromise;
+
+    socket.close.mockImplementationOnce(() => {
+      socket.readyState = MockWebSocket.CLOSING;
+    });
+
+    const closePromise = session.close();
+    await vi.advanceTimersByTimeAsync(5000);
+    await expect(closePromise).resolves.toBeUndefined();
   });
 });

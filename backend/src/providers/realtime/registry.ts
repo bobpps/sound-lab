@@ -3,9 +3,7 @@ import { GeminiRealtimeProvider } from './gemini.js';
 
 export type RealtimeProviderConstructor = new (apiKey: string) => IRealtimeProvider;
 
-const PROVIDERS: Record<string, RealtimeProviderConstructor> = {
-  'gemini-realtime': GeminiRealtimeProvider,
-};
+const PROVIDERS: Record<string, RealtimeProviderConstructor> = {};
 
 export function createRealtimeProvider(providerId: string, apiKey: string): IRealtimeProvider {
   const Provider = PROVIDERS[providerId];
@@ -27,3 +25,5 @@ export function registerRealtimeProvider(
 export function getSupportedRealtimeProviders(): string[] {
   return Object.keys(PROVIDERS);
 }
+
+registerRealtimeProvider('gemini-realtime', GeminiRealtimeProvider);

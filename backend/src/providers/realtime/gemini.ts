@@ -5,6 +5,7 @@ const GEMINI_REALTIME_URL =
   'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 const GEMINI_MODELS_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GEMINI_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
+const SESSION_CLOSE_TIMEOUT_MS = 5000;
 
 interface GeminiModelRecord {
   name?: string;
@@ -112,11 +113,8 @@ function getLiveModelName(model: GeminiModelRecord): string | null {
   const methods = Array.isArray(model.supportedGenerationMethods)
     ? model.supportedGenerationMethods
     : [];
-  const supportsRealtime = methods.includes('bidiGenerateContent');
-  const looksLikeLiveModel = candidate.toLowerCase().includes('live')
-    || String(model.displayName ?? '').toLowerCase().includes('live');
 
-  return supportsRealtime || looksLikeLiveModel ? candidate : null;
+  return methods.includes('bidiGenerateContent') ? candidate : null;
 }
 
 async function readErrorResponse(response: Response, fallback: string): Promise<string> {
@@ -177,6 +175,56 @@ function buildSetupMessage(config: RealtimeSessionConfig): Record<string, unknow
   }
 
   return { setup };
+}
+
+function closeSocket(socket: WebSocket, code: number, reason: string): void {
+  if (socket.readyState >= WebSocket.CLOSING) {
+    return;
+  }
+
+  socket.close(code, reason);
+}
+
+function waitForSocketClose(socket: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    let resolved = false;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = (): void => {
+      if (resolved) {
+        return;
+      }
+
+      resolved = true;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      resolve();
+    };
+
+    socket.once('close', () => {
+      finish();
+    });
+
+    timeoutHandle = setTimeout(() => {
+      if ('terminate' in socket && typeof socket.terminate === 'function') {
+        socket.terminate();
+      }
+
+      finish();
+    }, SESSION_CLOSE_TIMEOUT_MS);
+  });
+}
+
+function extractGoAwayEvent(goAway: Record<string, unknown>): RealtimeEvent {
+  const message = typeof goAway.message === 'string'
+    ? goAway.message
+    : 'Gemini Live API requested session shutdown';
+
+  return createErrorEvent(message, {
+    source: 'gemini',
+    timeLeft: typeof goAway.timeLeft === 'string' ? goAway.timeLeft : undefined,
+  });
 }
 
 function emitServerContent(
@@ -261,11 +309,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
       return this.closePromise;
     }
 
-    this.closePromise = new Promise((resolve) => {
-      this.socket.once('close', () => {
-        resolve();
-      });
-    });
+    this.closePromise = waitForSocketClose(this.socket);
 
     if (this.socket.readyState === WebSocket.OPEN) {
       await sendJson(this.socket, {
@@ -277,9 +321,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
       });
     }
 
-    if (this.socket.readyState < WebSocket.CLOSING) {
-      this.socket.close(1000, 'Session closed');
-    }
+    closeSocket(this.socket, 1000, 'Session closed');
 
     return this.closePromise;
   }
@@ -374,12 +416,15 @@ export class GeminiRealtimeProvider implements IRealtimeProvider {
         reject(payload as Error);
       };
 
+      const failStartup = (message: string): void => {
+        suppressRemoteSessionEnd();
+        settleStartup('reject', new Error(message));
+        closeSocket(socket, 1011, message);
+      };
+
       socket.on('open', () => {
         void sendJson(socket, buildSetupMessage(config)).catch((error) => {
-          settleStartup(
-            'reject',
-            new Error(getErrorMessage(error, 'Failed to configure Gemini realtime session')),
-          );
+          failStartup(getErrorMessage(error, 'Failed to configure Gemini realtime session'));
         });
       });
 
@@ -408,10 +453,17 @@ export class GeminiRealtimeProvider implements IRealtimeProvider {
         }
 
         if (isRecord(message.goAway)) {
-          const reason = typeof message.goAway.timeLeft === 'string'
-            ? message.goAway.timeLeft
-            : 'Gemini Live API requested session shutdown';
-          onEvent(createErrorEvent(reason, { source: 'gemini' }));
+          const goAwayEvent = extractGoAwayEvent(message.goAway);
+          onEvent(goAwayEvent);
+
+          if (!startupSettled) {
+            const payload = isRecord(goAwayEvent.data) ? goAwayEvent.data : null;
+            failStartup(
+              typeof payload?.message === 'string'
+                ? payload.message
+                : 'Gemini Live API requested session shutdown',
+            );
+          }
         }
       });
 
@@ -420,7 +472,7 @@ export class GeminiRealtimeProvider implements IRealtimeProvider {
         onEvent(createErrorEvent(message, { source: 'gemini' }));
 
         if (!startupSettled) {
-          settleStartup('reject', new Error(message));
+          failStartup(message);
         }
       });
 
