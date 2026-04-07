@@ -13,6 +13,8 @@ const FORMAT_MIME: Record<string, string> = {
   pcm: 'audio/pcm',
   linear16: 'audio/wav',
   ogg_opus: 'audio/ogg',
+  aac: 'audio/aac',
+  opus: 'audio/opus',
 };
 
 function audioContentType(format?: string): string {
