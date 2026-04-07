@@ -15,6 +15,7 @@ export interface ISynthesizeOptions {
   temperature?: number;
   format?: string;
   sampleRate?: number;
+  model?: string;
 }
 
 export interface ITTSProvider {
