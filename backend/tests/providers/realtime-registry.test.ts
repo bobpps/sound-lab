@@ -3,6 +3,7 @@ import {
   getSupportedRealtimeProviders,
   registerRealtimeProvider,
 } from '../../src/providers/realtime/registry.js';
+import { ElevenLabsRealtimeProvider } from '../../src/providers/realtime/elevenlabs.js';
 import type {
   IRealtimeProvider,
   IRealtimeSession,
@@ -34,6 +35,13 @@ class TestRealtimeProvider implements IRealtimeProvider {
 describe('Realtime Provider Registry', () => {
   const providerId = `test-realtime-${Math.random().toString(36).slice(2)}`;
 
+  it('returns the built-in ElevenLabs realtime provider', () => {
+    const provider = createRealtimeProvider('elevenlabs-realtime', 'test-key');
+
+    expect(provider).toBeInstanceOf(ElevenLabsRealtimeProvider);
+    expect(provider.id).toBe('elevenlabs-realtime');
+  });
+
   it('returns a registered realtime provider', () => {
     registerRealtimeProvider(providerId, TestRealtimeProvider);
 
@@ -52,6 +60,7 @@ describe('Realtime Provider Registry', () => {
   it('includes registered providers in the supported list', () => {
     const providers = getSupportedRealtimeProviders();
 
+    expect(providers).toContain('elevenlabs-realtime');
     expect(providers).toContain(providerId);
   });
 });

@@ -1,8 +1,11 @@
 import type { IRealtimeProvider } from './types.js';
+import { ElevenLabsRealtimeProvider } from './elevenlabs.js';
 
 export type RealtimeProviderConstructor = new (apiKey: string) => IRealtimeProvider;
 
-const PROVIDERS: Record<string, RealtimeProviderConstructor> = {};
+const PROVIDERS: Record<string, RealtimeProviderConstructor> = {
+  'elevenlabs-realtime': ElevenLabsRealtimeProvider,
+};
 
 export function createRealtimeProvider(providerId: string, apiKey: string): IRealtimeProvider {
   const Provider = PROVIDERS[providerId];
