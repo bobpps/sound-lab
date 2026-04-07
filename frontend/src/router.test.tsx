@@ -48,6 +48,18 @@ const promptsResponse = [
   },
 ];
 
+const realtimePromptsResponse = [
+  {
+    id: 11,
+    title: "Realtime assistant",
+    provider_id: "openai-realtime",
+    language: "en-US",
+    prompt: "Act as a concise assistant during live calls.",
+    created_by: null,
+    created_at: "2026-04-06T19:00:00.000Z",
+  },
+];
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -121,6 +133,14 @@ beforeEach(() => {
             created_at: "2026-04-06T17:00:00.000Z",
           },
         ]);
+      }
+
+      if (url.endsWith("/api/agent-prompts")) {
+        return jsonResponse(realtimePromptsResponse);
+      }
+
+      if (url.endsWith("/api/realtime/openai-realtime/models")) {
+        return jsonResponse(["gpt-realtime-mini"]);
       }
 
       return jsonResponse(
