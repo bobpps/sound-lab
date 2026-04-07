@@ -24,9 +24,11 @@ class TestRealtimeProvider implements IRealtimeProvider {
   }
 
   async createSession(
-    _config: RealtimeSessionConfig,
-    _onEvent: (event: RealtimeEvent) => void,
+    config: RealtimeSessionConfig,
+    onEvent: (event: RealtimeEvent) => void,
   ): Promise<IRealtimeSession> {
+    void config;
+    void onEvent;
     return {
       sendAudio(): void {},
       async close(): Promise<void> {},
