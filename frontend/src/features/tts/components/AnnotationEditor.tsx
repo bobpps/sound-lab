@@ -39,76 +39,61 @@ export function AnnotationEditor({
   const createAnnotationMessage = useCreateAnnotationMessage();
 
   const [showAutoAnnotate, setShowAutoAnnotate] = useState(false);
-  const [pairs, setPairs] = useState<MessagePair[]>([]);
+  const [localTexts, setLocalTexts] = useState<Map<number, string>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [savingVariant, setSavingVariant] = useState(false);
 
   const debounceTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
-  const hydratedAnnotationId = useRef<number | null>(null);
 
-  // Build pairs when data arrives or annotation changes
+  // Derive pairs from query data + local text overrides (no useEffect hydration)
+  const annotatedMap = new Map(
+    (annotationQuery.data?.messages ?? []).map((m) => [
+      m.dialog_message_id,
+      m,
+    ]),
+  );
+
+  const pairs: MessagePair[] = (dialogQuery.data?.messages ?? []).map(
+    (original) => {
+      const annotated = annotatedMap.get(original.id) ?? null;
+      const localText =
+        localTexts.get(original.id) ?? annotated?.text ?? original.text;
+      return { original, annotated, localText };
+    },
+  );
+
+  // Clear local edits and debounce timers when annotation changes or on unmount
   useEffect(() => {
-    if (!annotationQuery.data || !dialogQuery.data) {
-      return;
-    }
-
-    if (hydratedAnnotationId.current === annotationId) {
-      return;
-    }
-
-    const annotatedByDialogMsgId = new Map(
-      annotationQuery.data.messages.map((m) => [m.dialog_message_id, m]),
-    );
-
-    const newPairs = dialogQuery.data.messages.map((original) => {
-      const annotated = annotatedByDialogMsgId.get(original.id) ?? null;
-      return {
-        original,
-        annotated,
-        localText: annotated?.text ?? original.text,
-      };
-    });
-
-    setPairs(newPairs);
+    setLocalTexts(new Map());
     setError(null);
-    hydratedAnnotationId.current = annotationId;
-  }, [annotationId, annotationQuery.data, dialogQuery.data]);
-
-  // Reset hydration ref when annotationId changes
-  useEffect(() => {
-    hydratedAnnotationId.current = null;
-  }, [annotationId]);
-
-  // Cleanup timers on unmount
-  useEffect(() => {
     const timers = debounceTimers.current;
+
     return () => {
       for (const timer of timers.values()) {
         clearTimeout(timer);
       }
+      timers.clear();
     };
-  }, []);
+  }, [annotationId]);
 
   function handleTextChange(dialogMessageId: number, newText: string) {
     setError(null);
 
-    setPairs((current) =>
-      current.map((pair) =>
-        pair.original.id === dialogMessageId
-          ? { ...pair, localText: newText }
-          : pair,
-      ),
-    );
+    setLocalTexts((current) => {
+      const next = new Map(current);
+      next.set(dialogMessageId, newText);
+      return next;
+    });
 
-    // Find the annotated message to update
-    const pair = pairs.find((p) => p.original.id === dialogMessageId);
-    if (!pair?.annotated) {
+    // Look up annotated message from query data directly (avoids stale closure)
+    const annotatedMsg = annotationQuery.data?.messages.find(
+      (m) => m.dialog_message_id === dialogMessageId,
+    );
+    if (!annotatedMsg) {
       return;
     }
-
-    const annotatedMessageId = pair.annotated.id;
 
     // Clear existing timer for this message
     const existing = debounceTimers.current.get(dialogMessageId);
@@ -121,7 +106,7 @@ export function AnnotationEditor({
       updateMessage.mutate(
         {
           annotationId,
-          messageId: annotatedMessageId,
+          messageId: annotatedMsg.id,
           data: { text: newText },
         },
         {
@@ -254,13 +239,18 @@ export function AnnotationEditor({
                 <span className="mb-1 block text-xs font-medium text-gray-400">
                   Annotated
                 </span>
-                <input
-                  type="text"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                <textarea
+                  rows={2}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                    pair.annotated === null
+                      ? "border-gray-200 bg-gray-50 text-gray-400"
+                      : "border-gray-300 bg-white text-gray-900"
+                  }`}
                   value={pair.localText}
                   onChange={(e) =>
                     handleTextChange(pair.original.id, e.target.value)
                   }
+                  disabled={pair.annotated === null}
                   aria-label={`Annotated text for message ${index + 1}`}
                 />
               </div>
