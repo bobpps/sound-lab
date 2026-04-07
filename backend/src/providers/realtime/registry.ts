@@ -2,10 +2,13 @@ import type { IRealtimeProvider } from './types.js';
 import { InworldRealtimeProvider } from './inworld.js';
 import { ElevenLabsRealtimeProvider } from './elevenlabs.js';
 import { GeminiRealtimeProvider } from './gemini.js';
+import { OpenAIRealtimeProvider } from './openai.js';
 
 export type RealtimeProviderConstructor = new (apiKey: string) => IRealtimeProvider;
 
-const PROVIDERS: Record<string, RealtimeProviderConstructor> = {};
+const PROVIDERS: Record<string, RealtimeProviderConstructor> = {
+  'openai-realtime': OpenAIRealtimeProvider,
+};
 
 export function createRealtimeProvider(providerId: string, apiKey: string): IRealtimeProvider {
   const Provider = PROVIDERS[providerId];
