@@ -3,6 +3,9 @@ import { api } from "../../../lib/api-client.ts";
 import type {
   AnnotatedDialog,
   AnnotatedDialogWithMessages,
+  Dialog,
+  DialogWithMessages,
+  Provider,
   Voice,
 } from "../../../types/api.ts";
 
@@ -42,5 +45,30 @@ export function useAnnotation(annotationId: number | null) {
     queryFn: () =>
       api.get<AnnotatedDialogWithMessages>(`/annotations/${annotationId}`),
     enabled: annotationId !== null,
+  });
+}
+
+// Re-declared here to avoid cross-feature imports.
+// Uses the same query keys as datasets, so TanStack Query deduplicates requests.
+
+export function useProviderList() {
+  return useQuery({
+    queryKey: ["providers", "tts"],
+    queryFn: () => api.get<Provider[]>("/providers?type=tts"),
+  });
+}
+
+export function useDialogList() {
+  return useQuery({
+    queryKey: ["dialogs", "list"],
+    queryFn: () => api.get<Dialog[]>("/dialogs"),
+  });
+}
+
+export function useDialogDetail(dialogId: number | null) {
+  return useQuery({
+    queryKey: ["dialogs", "detail", dialogId ?? 0],
+    queryFn: () => api.get<DialogWithMessages>(`/dialogs/${dialogId}`),
+    enabled: dialogId !== null,
   });
 }

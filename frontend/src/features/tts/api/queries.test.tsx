@@ -8,6 +8,9 @@ import {
   useTtsVoices,
   useAnnotations,
   useAnnotation,
+  useProviderList,
+  useDialogList,
+  useDialogDetail,
   ttsVoiceKeys,
   annotationKeys,
 } from "./queries.ts";
@@ -81,6 +84,27 @@ describe("tts queries", () => {
 
         if (url === "/api/annotations/1") {
           return jsonResponse(annotationWithMessages);
+        }
+
+        if (url === "/api/providers?type=tts") {
+          return jsonResponse([
+            { id: "google", name: "Google", type: "tts", enabled: true, created_at: "2026-04-03T09:00:00.000Z" },
+          ]);
+        }
+
+        if (url === "/api/dialogs") {
+          return jsonResponse([
+            { id: 10, title: "Test dialog", description: null, language: "en-US", created_by: null, created_at: "2026-04-03T10:00:00.000Z" },
+          ]);
+        }
+
+        if (url === "/api/dialogs/10") {
+          return jsonResponse({
+            id: 10, title: "Test dialog", description: null, language: "en-US", created_by: null, created_at: "2026-04-03T10:00:00.000Z",
+            messages: [
+              { id: 50, dialog_id: 10, order: 1, character: 1, text: "Hello." },
+            ],
+          });
         }
 
         return jsonResponse({ message: "Not Found" }, 404);
@@ -161,6 +185,56 @@ describe("tts queries", () => {
     const wrapper = createTestWrapper({ queryClient });
 
     const { result } = renderHook(() => useAnnotation(null), { wrapper });
+
+    expect(result.current.isFetching).toBe(false);
+  });
+
+  it("fetches TTS providers", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useProviderList(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data?.[0].id).toBe("google");
+  });
+
+  it("fetches dialog list", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useDialogList(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data?.[0].title).toBe("Test dialog");
+  });
+
+  it("fetches dialog detail with messages", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useDialogDetail(10), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data?.messages).toHaveLength(1);
+  });
+
+  it("does not fetch dialog detail when dialogId is null", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useDialogDetail(null), { wrapper });
 
     expect(result.current.isFetching).toBe(false);
   });
