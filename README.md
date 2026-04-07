@@ -16,7 +16,7 @@ Internal tool for testing TTS providers, realtime voice agents, and managing dia
 | Frontend | React 19, Vite 8, TypeScript |
 | Backend | Fastify 5, TypeScript |
 | Database | Supabase (Postgres) or SQLite (local dev) |
-| TTS | Google, ElevenLabs, Inworld |
+| TTS | Google, ElevenLabs, Inworld, Gemini |
 | LLM | OpenAI, Anthropic |
 | Auth | Supabase Auth (production) / single-user (local) |
 
@@ -84,6 +84,15 @@ sound-lab/
       api/
   docs/             Architecture and UI documentation
 ```
+
+## Configuring Gemini TTS
+
+1. Go to [Google AI Studio](https://aistudio.google.com/).
+2. Click **Get API key** → **Create API key** (or visit [aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
+3. Select or create a Google Cloud project, then copy the generated key.
+4. Paste the key into the **Gemini TTS** provider on the Providers page.
+
+> The Gemini API offers a free tier with rate limits. Paid usage requires a billing account linked to the Google Cloud project.
 
 ## Documentation
 
