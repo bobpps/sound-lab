@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { Dialog } from "../../../types/api.ts";
 import { useCreateDialog, useDialogs } from "../api/queries.ts";
+import { LlmActionDialog } from "./LlmActionDialog.tsx";
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -25,6 +26,7 @@ export function DialogList() {
   const dialogsQuery = useDialogs();
   const createDialog = useCreateDialog();
   const [createError, setCreateError] = useState<string | null>(null);
+  const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
 
   async function handleCreateDialog() {
     setCreateError(null);
@@ -54,14 +56,23 @@ export function DialogList() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-          onClick={handleCreateDialog}
-          disabled={createDialog.isPending}
-        >
-          {createDialog.isPending ? "Creating..." : "New Dialog"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            onClick={() => setIsGenerateDialogOpen(true)}
+          >
+            Generate New
+          </button>
+          <button
+            type="button"
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={handleCreateDialog}
+            disabled={createDialog.isPending}
+          >
+            {createDialog.isPending ? "Creating..." : "New Dialog"}
+          </button>
+        </div>
       </div>
 
       {createError ? (
@@ -126,6 +137,17 @@ export function DialogList() {
             </tbody>
           </table>
         </div>
+      ) : null}
+
+      {isGenerateDialogOpen ? (
+        <LlmActionDialog
+          mode="generate"
+          onClose={() => setIsGenerateDialogOpen(false)}
+          onSuccess={(dialog) => {
+            setIsGenerateDialogOpen(false);
+            navigate(`/datasets/dialogs/${dialog.id}`);
+          }}
+        />
       ) : null}
     </section>
   );

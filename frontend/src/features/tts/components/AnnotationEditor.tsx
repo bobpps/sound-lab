@@ -3,7 +3,7 @@ import { api } from "../../../lib/api-client.ts";
 import type { AnnotatedMessage, DialogMessage } from "../../../types/api.ts";
 import {
   useAnnotation,
-  useDialogWithMessages,
+  useDialogDetail,
   useUpdateAnnotatedMessage,
   useCreateAnnotation,
   useCreateAnnotationMessage,
@@ -34,7 +34,7 @@ export function AnnotationEditor({
   onAnnotationCreated,
 }: AnnotationEditorProps) {
   const annotationQuery = useAnnotation(annotationId);
-  const dialogQuery = useDialogWithMessages(dialogId);
+  const dialogQuery = useDialogDetail(dialogId);
   const updateMessage = useUpdateAnnotatedMessage();
   const createAnnotation = useCreateAnnotation();
   const createAnnotationMessage = useCreateAnnotationMessage();

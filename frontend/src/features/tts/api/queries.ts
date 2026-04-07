@@ -18,8 +18,8 @@ export const ttsKeys = {
   annotations: (dialogId: number) => ["tts", "annotations", dialogId] as const,
   annotation: (annotationId: number) =>
     ["tts", "annotation", annotationId] as const,
-  dialogWithMessages: (dialogId: number) =>
-    ["tts", "dialogWithMessages", dialogId] as const,
+  dialogDetail: (dialogId: number) =>
+    ["tts", "dialog-detail", dialogId] as const,
   llmProviders: () => ["tts", "llmProviders"] as const,
   llmModels: (providerId: string) =>
     ["tts", "llmModels", providerId] as const,
@@ -66,9 +66,9 @@ export function useAnnotation(annotationId: number | null) {
   });
 }
 
-export function useDialogWithMessages(dialogId: number | null) {
+export function useDialogDetail(dialogId: number | null) {
   return useQuery({
-    queryKey: ttsKeys.dialogWithMessages(dialogId ?? 0),
+    queryKey: ttsKeys.dialogDetail(dialogId ?? 0),
     queryFn: () => api.get<DialogWithMessages>(`/dialogs/${dialogId}`),
     enabled: dialogId !== null,
   });

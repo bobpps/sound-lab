@@ -25,7 +25,7 @@ const annotations = [
     id: 12,
     dialog_id: 1,
     provider_id: "elevenlabs",
-    title: "Elevenlabs annotation",
+    title: "ElevenLabs annotation",
     created_by: null,
     created_at: "2026-04-04T10:00:00.000Z",
   },
@@ -156,6 +156,28 @@ describe("AnnotationSelector", () => {
     expect(select).toHaveValue("10");
   });
 
+  it("only shows annotations for the selected provider", async () => {
+    renderWithProviders(
+      <AnnotationSelector
+        dialogId={1}
+        providerId="openai"
+        selectedAnnotationId={null}
+        onSelect={onSelect}
+      />,
+    );
+
+    const select = await screen.findByRole("combobox", {
+      name: "Annotation Variant",
+    });
+
+    const options = select.querySelectorAll("option");
+    const optionTexts = Array.from(options).map((o) => o.textContent);
+
+    expect(optionTexts).toContain("Formal annotation");
+    expect(optionTexts).toContain("Casual annotation");
+    expect(optionTexts).not.toContain("ElevenLabs annotation");
+  });
+
   it("shows 'Clean' as selected when selectedAnnotationId is null", async () => {
     renderWithProviders(
       <AnnotationSelector
@@ -191,6 +213,6 @@ describe("AnnotationSelector", () => {
     // Should show openai annotations but not elevenlabs
     expect(optionTexts).toContain("Formal annotation");
     expect(optionTexts).toContain("Casual annotation");
-    expect(optionTexts).not.toContain("Elevenlabs annotation");
+    expect(optionTexts).not.toContain("ElevenLabs annotation");
   });
 });

@@ -11,7 +11,7 @@ import {
   useDialogs,
   useAnnotationsByDialog,
   useAnnotation,
-  useDialogWithMessages,
+  useDialogDetail,
   useLlmProviders,
   useLlmModels,
   useAnnotationPrompts,
@@ -77,30 +77,15 @@ const annotationWithMessages = {
   created_by: null,
   created_at: "2026-04-02T10:00:00.000Z",
   messages: [
-    {
-      id: 100,
-      annotated_dialog_id: 10,
-      dialog_message_id: 1,
-      text: "Good morning, how may I help you?",
-    },
+    { id: 100, annotated_dialog_id: 10, dialog_message_id: 50, text: "Hello there." },
+    { id: 101, annotated_dialog_id: 10, dialog_message_id: 51, text: "Hi, how are you?" },
   ],
 };
 
 const dialogWithMessages = {
-  id: 1,
-  title: "Greeting",
-  description: null,
-  language: "en-US",
-  created_by: null,
-  created_at: "2026-04-01T10:00:00.000Z",
+  ...dialogs[0],
   messages: [
-    {
-      id: 1,
-      dialog_id: 1,
-      order: 1,
-      character: 1,
-      text: "Hello, how can I help you?",
-    },
+    { id: 50, dialog_id: 1, order: 1, character: 1 as const, text: "Hello." },
   ],
 };
 
@@ -169,7 +154,7 @@ describe("tts queries", () => {
           return jsonResponse(annotationWithMessages);
         }
 
-        if (url.endsWith("/api/dialogs/1") && method === "GET") {
+        if (url.endsWith("/api/dialogs/1") && !url.includes("annotations") && method === "GET") {
           return jsonResponse(dialogWithMessages);
         }
 
@@ -226,7 +211,7 @@ describe("tts queries", () => {
           method === "PUT"
         ) {
           const body = JSON.parse(init?.body as string);
-          return jsonResponse({ id: 100, annotated_dialog_id: 10, dialog_message_id: 1, ...body });
+          return jsonResponse({ id: 100, annotated_dialog_id: 10, dialog_message_id: 50, ...body });
         }
 
         return jsonResponse({ message: "Not Found" }, 404);
@@ -330,7 +315,7 @@ describe("tts queries", () => {
     expect(result.current.fetchStatus).toBe("idle");
   });
 
-  it("fetches annotation with messages by id", async () => {
+  it("fetches a single annotation with messages", async () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
@@ -341,10 +326,7 @@ describe("tts queries", () => {
     });
 
     expect(result.current.data).toEqual(annotationWithMessages);
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/annotations/10",
-      expect.objectContaining({ method: "GET" }),
-    );
+    expect(result.current.data?.messages).toHaveLength(2);
   });
 
   it("disables annotation query when annotationId is null", () => {
@@ -356,30 +338,24 @@ describe("tts queries", () => {
     expect(result.current.fetchStatus).toBe("idle");
   });
 
-  it("fetches dialog with messages by id", async () => {
+  it("fetches dialog detail with messages", async () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
-    const { result } = renderHook(() => useDialogWithMessages(1), { wrapper });
+    const { result } = renderHook(() => useDialogDetail(1), { wrapper });
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(result.current.data).toEqual(dialogWithMessages);
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/dialogs/1",
-      expect.objectContaining({ method: "GET" }),
-    );
+    expect(result.current.data?.messages).toHaveLength(1);
   });
 
-  it("disables dialog-with-messages query when dialogId is null", () => {
+  it("disables dialog detail query when dialogId is null", () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
-    const { result } = renderHook(() => useDialogWithMessages(null), {
-      wrapper,
-    });
+    const { result } = renderHook(() => useDialogDetail(null), { wrapper });
 
     expect(result.current.fetchStatus).toBe("idle");
   });
@@ -454,11 +430,7 @@ describe("tts queries", () => {
     expect(ttsKeys.dialogs()).toEqual(["tts", "dialogs"]);
     expect(ttsKeys.annotations(1)).toEqual(["tts", "annotations", 1]);
     expect(ttsKeys.annotation(10)).toEqual(["tts", "annotation", 10]);
-    expect(ttsKeys.dialogWithMessages(1)).toEqual([
-      "tts",
-      "dialogWithMessages",
-      1,
-    ]);
+    expect(ttsKeys.dialogDetail(1)).toEqual(["tts", "dialog-detail", 1]);
     expect(ttsKeys.llmProviders()).toEqual(["tts", "llmProviders"]);
     expect(ttsKeys.llmModels("openai")).toEqual([
       "tts",
