@@ -3,6 +3,7 @@ import {
   getSupportedRealtimeProviders,
   registerRealtimeProvider,
 } from '../../src/providers/realtime/registry.js';
+import { GeminiRealtimeProvider } from '../../src/providers/realtime/gemini.js';
 import type {
   IRealtimeProvider,
   IRealtimeSession,
@@ -53,5 +54,12 @@ describe('Realtime Provider Registry', () => {
     const providers = getSupportedRealtimeProviders();
 
     expect(providers).toContain(providerId);
+  });
+
+  it('creates the built-in Gemini realtime provider', () => {
+    const provider = createRealtimeProvider('gemini-realtime', 'test-key');
+
+    expect(provider).toBeInstanceOf(GeminiRealtimeProvider);
+    expect(provider.id).toBe('gemini-realtime');
   });
 });
