@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb } from './test-helpers.js';
 import { LocalProviderRepository } from '../../src/db/local/providers.js';
-import type Database from 'better-sqlite3';
+import type { WrappedDatabase } from '../../src/db/local/client.js';
 
 const ENCRYPTION_KEY = 'test-encryption-key-for-testing!';
 
 describe('LocalProviderRepository', () => {
-  let db: Database.Database;
+  let db: WrappedDatabase;
   let repo: LocalProviderRepository;
 
-  beforeEach(() => {
-    db = createTestDb();
+  beforeEach(async () => {
+    db = await createTestDb();
     repo = new LocalProviderRepository(db, ENCRYPTION_KEY);
   });
 

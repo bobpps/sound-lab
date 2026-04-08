@@ -1,6 +1,6 @@
 import { createMemoryDb } from '../../src/db/local/client.js';
-import type Database from 'better-sqlite3';
+import type { WrappedDatabase } from '../../src/db/local/client.js';
 
-export function createTestDb(): Database.Database {
+export async function createTestDb(): Promise<WrappedDatabase> {
   return createMemoryDb();
 }

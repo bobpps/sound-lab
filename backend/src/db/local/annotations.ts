@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { WrappedDatabase } from './client.js';
 import type {
   AnnotatedDialog, AnnotatedDialogWithMessages, AnnotatedMessage,
   CreateAnnotatedDialog, CreateAnnotatedMessage, UpdateAnnotatedMessage,
@@ -6,7 +6,7 @@ import type {
 import type { IAnnotationRepository } from '../interfaces.js';
 
 export class LocalAnnotationRepository implements IAnnotationRepository {
-  constructor(private db: Database.Database) {}
+  constructor(private db: WrappedDatabase) {}
 
   async listByDialog(dialogId: number): Promise<AnnotatedDialog[]> {
     return this.db

@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb } from './test-helpers.js';
 import { LocalAnnotationPromptRepository, LocalAgentPromptRepository } from '../../src/db/local/prompts.js';
-import type Database from 'better-sqlite3';
+import type { WrappedDatabase } from '../../src/db/local/client.js';
 
 describe('LocalAnnotationPromptRepository', () => {
-  let db: Database.Database;
+  let db: WrappedDatabase;
   let repo: LocalAnnotationPromptRepository;
 
-  beforeEach(() => {
-    db = createTestDb();
+  beforeEach(async () => {
+    db = await createTestDb();
     repo = new LocalAnnotationPromptRepository(db);
   });
 
@@ -53,11 +53,11 @@ describe('LocalAnnotationPromptRepository', () => {
 });
 
 describe('LocalAgentPromptRepository', () => {
-  let db: Database.Database;
+  let db: WrappedDatabase;
   let repo: LocalAgentPromptRepository;
 
-  beforeEach(() => {
-    db = createTestDb();
+  beforeEach(async () => {
+    db = await createTestDb();
     repo = new LocalAgentPromptRepository(db);
   });
 

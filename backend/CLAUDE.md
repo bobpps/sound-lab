@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Best practices for the backend (Fastify 5, TypeScript, better-sqlite3, Supabase, Vitest).
+Best practices for the backend (Fastify 5, TypeScript, sql.js, Supabase, Vitest).
 
 ## Codebase Conventions
 

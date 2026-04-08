@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { WrappedDatabase } from './client.js';
 import type {
   Dialog, DialogMessage, DialogWithMessages,
   CreateDialog, UpdateDialog, CreateDialogMessage, UpdateDialogMessage,
@@ -6,7 +6,7 @@ import type {
 import type { IDialogRepository } from '../interfaces.js';
 
 export class LocalDialogRepository implements IDialogRepository {
-  constructor(private db: Database.Database) {}
+  constructor(private db: WrappedDatabase) {}
 
   async list(): Promise<Dialog[]> {
     return this.db.prepare('SELECT * FROM dialogs ORDER BY created_at DESC').all() as Dialog[];

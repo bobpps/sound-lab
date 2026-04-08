@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { WrappedDatabase } from './client.js';
 import type {
   AnnotationPrompt, CreateAnnotationPrompt, UpdateAnnotationPrompt,
   AgentPrompt, CreateAgentPrompt, UpdateAgentPrompt,
@@ -6,7 +6,7 @@ import type {
 import type { IAnnotationPromptRepository, IAgentPromptRepository } from '../interfaces.js';
 
 export class LocalAnnotationPromptRepository implements IAnnotationPromptRepository {
-  constructor(private db: Database.Database) {}
+  constructor(private db: WrappedDatabase) {}
 
   async list(): Promise<AnnotationPrompt[]> {
     return this.db.prepare('SELECT * FROM annotation_prompts ORDER BY created_at DESC').all() as AnnotationPrompt[];
@@ -42,7 +42,7 @@ export class LocalAnnotationPromptRepository implements IAnnotationPromptReposit
 }
 
 export class LocalAgentPromptRepository implements IAgentPromptRepository {
-  constructor(private db: Database.Database) {}
+  constructor(private db: WrappedDatabase) {}
 
   async list(): Promise<AgentPrompt[]> {
     return this.db.prepare('SELECT * FROM agent_prompts ORDER BY created_at DESC').all() as AgentPrompt[];

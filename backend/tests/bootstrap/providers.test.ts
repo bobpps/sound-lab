@@ -5,8 +5,8 @@ import { createTestDb } from '../db/test-helpers.js';
 
 const ENCRYPTION_KEY = 'test-encryption-key';
 
-function createTestProviderDatabase(): IDatabase {
-  const sqliteDb = createTestDb();
+async function createTestProviderDatabase(): Promise<IDatabase> {
+  const sqliteDb = await createTestDb();
 
   return {
     dialogs: null as never,
@@ -33,7 +33,7 @@ function createTestProviderDatabase(): IDatabase {
 
 describe('bootstrapProviders', () => {
   it('seeds the default provider catalog into an empty database', async () => {
-    const db = createTestProviderDatabase();
+    const db = await createTestProviderDatabase();
 
     try {
       await bootstrapProviders(db);
@@ -49,7 +49,7 @@ describe('bootstrapProviders', () => {
   });
 
   it('does not overwrite existing providers or their keys', async () => {
-    const db = createTestProviderDatabase();
+    const db = await createTestProviderDatabase();
 
     try {
       await db.providers.create({ id: 'openai', name: 'Custom OpenAI', type: 'llm' });
