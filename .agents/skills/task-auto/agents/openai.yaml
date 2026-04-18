@@ -1,0 +1,7 @@
+interface:
+  display_name: "Task Auto"
+  short_description: "Autonomous GitHub issue implementation"
+  default_prompt: "Use $task-auto to implement GitHub issue #12 end to end."
+
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Code Critic"
+  short_description: "Architectural review for sound-lab changes"
+  default_prompt: "Use $code-critic to review the current branch against main."
+
+policy:
+  allow_implicit_invocation: false
