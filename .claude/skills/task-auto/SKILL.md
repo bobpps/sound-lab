@@ -1,24 +1,29 @@
 ---
 name: task-auto
 description: >
-  Fully autonomous GitHub issue implementation with superpowers-driven planning,
+  End-to-end GitHub issue implementation with superpowers-driven planning,
   adaptive TDD/subagent-driven execution, alignment checking, and code-critic
   review. Delegates heavy work to subagents invoking superpowers skills.
-  Zero-touch execution — no user interaction after launch.
+  By default pauses after PR creation with a worktree UI review server for
+  human approval before final issue comment and worktree cleanup. Supports an
+  explicit no-human-review flag for fully autonomous cleanup.
 disable-model-invocation: true
 ---
 
 # Task Auto
 
-Implement a GitHub issue in this repository through a fully autonomous
+Implement a GitHub issue in this repository through an autonomous
 orchestrator that delegates heavy work to subagents invoking superpowers
 skills, uses a dedicated git worktree, persistent markdown artifacts,
 adaptive execution strategy, mandatory alignment checking, and architectural
-criticism before PR creation.
+criticism before PR creation. By default the workflow stops at a Human Review
+Gate after PR creation and removes the worktree only after explicit human
+approval.
 
 ## Overview
 
-Use this skill when the goal is zero-touch task execution:
+Use this skill when the goal is end-to-end task execution with minimal user
+interaction:
 
 - take a GitHub issue number
 - gather context without asking the user
@@ -26,11 +31,34 @@ Use this skill when the goal is zero-touch task execution:
 - verify, review, and align in isolated agent contexts
 - run architectural criticism before finalizing
 - create the commit, push, and PR automatically
-- update the GitHub issue automatically
-- remove the worktree after the PR flow
+- pause at the Human Review Gate (unless disabled) for local UI review and
+  explicit approval
+- post the final GitHub issue comment and remove the worktree after the
+  release gate (and human approval when the gate is enabled) is satisfied
 
-Do not ask the user for clarification, approval, or a cleanup choice. This
-skill is for autonomous execution, not interactive collaboration.
+Do not ask the user for clarification during research, planning, or
+implementation. The only permitted human interaction is the Human Review Gate
+before worktree cleanup, and only when it is enabled.
+
+## Invocation Flags
+
+By default this skill enables the Human Review Gate: after PR creation it
+starts a UI from the task worktree, stops for human review, and removes the
+worktree only after explicit approval.
+
+Disable the Human Review Gate only when the invocation includes an explicit
+No Human Review flag or instruction such as:
+
+- `--no-human-review`
+- `no_human_review=true`
+- `human_review=false`
+- `review_gate=none`
+- a natural-language request to run fully autonomously without local human
+  review
+
+When the No Human Review flag is set, the workflow runs fully autonomously
+through the final issue comment and worktree cleanup. Record the resolved
+gate state (enabled or disabled) in `finalization.md`.
 
 ## Prerequisites
 
@@ -97,13 +125,21 @@ These rules are mandatory.
 10. Resolve uncertainty autonomously through repository files, GitHub issue
     details, related issues, web research, and other available trusted
     sources before taking a best-effort decision.
-11. Never ask the user for clarification or approval once execution starts.
+11. Do not ask the user for clarification or approval during research,
+    planning, implementation, verification, or review. The only permitted
+    exception is the Human Review Gate before worktree cleanup, and only when
+    that gate is enabled.
 12. Use the adaptive return loop: if reviews find issues, return to the
     appropriate step based on severity and re-run downstream steps.
-13. Create the commit, push, PR, and final GitHub comment automatically when
-    the release gate is satisfied.
-14. Remove the worktree after PR creation.
-15. Leave the main workspace unchanged after cleanup.
+13. Create the commit, push, and PR automatically when the release gate is
+    satisfied.
+14. If the Human Review Gate is enabled, start a UI review server from the
+    task worktree and stop for explicit human approval before posting the
+    final issue comment or removing the worktree.
+15. If the Human Review Gate is enabled, remove the worktree only after the
+    human explicitly approves cleanup. Otherwise remove it automatically
+    after posting the final issue comment.
+16. Leave the main workspace unchanged after cleanup.
 
 ## Project-Specific Rules
 
@@ -494,9 +530,10 @@ same severity level, escalate to the next level (Minor → Major, Major →
 Fundamental). If a Fundamental issue persists after 2 loops, record it as a
 technical blocker in `finalization.md` and stop.
 
-Do not ask the user. Classify severity and loop or proceed autonomously.
+Do not ask the user during the release gate. Classify severity and loop or
+proceed autonomously.
 
-### 14. Finalize Automatically
+### 14. Finalize
 
 When the release gate is satisfied:
 
@@ -506,18 +543,40 @@ When the release gate is satisfied:
 2. Create any missing commit needed for the branch.
 3. Push the branch.
 4. Create the PR against `main` linking the issue: `Closes #<issue-number>`.
-5. Post a final GitHub issue comment with:
+5. If the Human Review Gate is enabled, start a worktree UI review
+   environment:
+   - Run the app from the task worktree, not the main checkout.
+   - Use the normal dev command when possible. If default ports are occupied,
+     use alternate free ports and document them.
+   - Include backend and frontend URLs, process IDs, and any special commands
+     in `finalization.md`.
+   - Open the relevant UI route in the browser when browser tooling is
+     available, and run a quick console/screenshot sanity check when
+     practical.
+6. If the Human Review Gate is enabled, stop and ask the human to review the
+   PR and the running worktree UI. Do not continue cleanup until the human
+   explicitly says to proceed.
+7. If the human requests changes, keep the worktree, implement the requested
+   fixes in the same worktree, rerun verification / review / alignment /
+   code-critic as needed, update the PR branch, and return to the Human
+   Review Gate.
+8. If the Human Review Gate is enabled and approval is granted, stop the
+   review servers unless the human asks to keep them running.
+9. Post a final GitHub issue comment with:
    - what was implemented
    - what was verified
    - the PR link
    - any notable follow-up information
-6. Remove the worktree.
+10. Remove the worktree.
 
 Write `finalization.md` with the final outcomes:
 
+- Human Review Gate status (enabled or disabled, and how it was resolved)
 - commit or branch status
 - push result
 - PR link or failure
+- UI review server details when the gate was enabled
+- human approval status when applicable
 - GitHub comment result
 - worktree cleanup result
 
@@ -534,8 +593,11 @@ The parent session is the orchestrator. Agents handle bounded work.
 Parent session owns:
 
 - prerequisites check
+- Human Review Gate resolution (detecting the flag, pausing, waiting for
+  approval, looping back on change requests)
 - GitHub issue reads and comments
 - worktree lifecycle (create, resume, delete)
+- UI review server lifecycle (start, document, stop)
 - artifact oversight (reading agent outputs, deciding next step)
 - adaptive return decisions (severity classification, loop control)
 - verification (step 9)
@@ -556,7 +618,9 @@ Agents must NOT:
 - create or delete the worktree
 - push, create the PR, or remove the worktree
 - post GitHub comments
-- bypass the release gate or adaptive return loop
+- start, stop, or own the UI review server
+- interact with the human during the Human Review Gate
+- bypass the release gate, Human Review Gate, or adaptive return loop
 - perform unrelated cleanup
 
 ## Resume Rules
@@ -575,8 +639,10 @@ Treat the existing artifact set as the source of continuity.
 
 ### Asking the user anyway
 
-Do not ask the user for clarification, approval, or cleanup choices during
-the run. Expand context and decide autonomously.
+Do not ask the user for clarification during research, planning,
+implementation, verification, or review. Expand context and decide
+autonomously. The only permitted human interaction is the Human Review Gate
+before worktree cleanup, and only when that gate is enabled.
 
 ### Treating related issues as mandatory reading
 
@@ -613,8 +679,21 @@ or Fundamental to determine the correct return point.
 
 ### Switching the main workspace
 
-Do not change the main workspace branch in autonomous mode. Clean up the
-worktree and leave the main workspace unchanged.
+Do not change the main workspace branch. Clean up the worktree and leave the
+main workspace unchanged.
+
+### Removing the worktree before human approval
+
+When the Human Review Gate is enabled, the worktree must remain until the
+human explicitly approves cleanup. Do not remove it automatically just
+because the PR was created.
+
+### Ignoring the no-human-review flag
+
+If the invocation includes an explicit `--no-human-review` (or equivalent)
+flag, skip the UI review server and proceed to the final comment and
+worktree removal without pausing. Record the resolved gate state in
+`finalization.md` either way.
 
 ### Breaking the dual-DB contract
 
@@ -635,10 +714,15 @@ Stop and correct the workflow if any of these happen:
 - implementation started before `analysis.md`
 - code changes started before `plan.md`
 - the execution agent was not given the correct superpowers skill override
-- the user is about to be asked for clarification or approval
+- the user is about to be asked for clarification or approval outside the
+  Human Review Gate
 - the PR is about to be created before `alignment-check.md` and
   `code-critic.md`
 - the final GitHub comment is being skipped
+- the Human Review Gate is enabled but the workflow is about to remove the
+  worktree without explicit human approval
+- the Human Review Gate is enabled but no UI review server was started or
+  documented in `finalization.md`
 - the main workspace is about to be switched automatically
 - an issue was found but severity was not classified
 - a repository interface was changed without both implementations updated

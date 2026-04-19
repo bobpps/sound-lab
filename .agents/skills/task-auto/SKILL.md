@@ -1,6 +1,6 @@
 ---
 name: task-auto
-description: "Autonomous Codex workflow for implementing a GitHub issue in sound-lab. Use only when explicitly invoked as $task-auto with a GitHub issue number or when the user asks for zero-touch end-to-end GitHub issue implementation. Creates or resumes a dedicated .agents/worktrees worktree, writes task artifacts, researches, plans, implements, verifies, reviews, checks alignment, runs code-critic, then commits, pushes, opens a PR, comments on the issue, and cleans up when gates pass."
+description: "Autonomous Codex workflow for implementing a GitHub issue in sound-lab. Use only when explicitly invoked as $task-auto with a GitHub issue number or when the user asks for end-to-end GitHub issue implementation. Creates or resumes a dedicated .agents/worktrees worktree, writes task artifacts, researches, plans, implements, verifies, reviews, checks alignment, runs code-critic, then commits, pushes, opens a PR, pauses by default with a worktree UI review server for human approval, comments on the issue, and cleans up. Supports an explicit no-human-review flag for fully autonomous cleanup."
 ---
 
 # Task Auto
@@ -27,8 +27,27 @@ the blocker in `finalization.md` and stop cleanly.
   artifact contract.
 
 Do not ask the user for clarification or approval after execution starts unless
-the active system/developer instructions require it or the task cannot continue
-without external credentials.
+the active system/developer instructions require it, the task cannot continue
+without external credentials, or the workflow reaches an enabled Human Review
+Gate before worktree cleanup.
+
+## Invocation Flags
+
+By default this skill enables the Human Review Gate: after PR creation it starts
+a UI from the task worktree, stops for human review, and removes the worktree
+only after explicit approval.
+
+Disable the Human Review Gate only when the invocation includes an explicit
+No Human Review flag or instruction such as:
+
+- `--no-human-review`
+- `no_human_review=true`
+- `human_review=false`
+- `review_gate=none`
+- a natural-language request to run fully autonomously without local human review
+
+When the No Human Review flag is set, the workflow runs fully autonomously
+through final issue comment and worktree cleanup.
 
 ## Repository Defaults
 
@@ -70,8 +89,13 @@ Claude-specific.
 9. If review, alignment, or code-critic finds issues, loop back to the right
    phase based on severity.
 10. Create the commit, push, PR, and final GitHub comment only after gates pass.
-11. Remove the worktree after PR creation.
-12. Leave the main workspace branch and files unchanged.
+11. If the Human Review Gate is enabled, start a UI review server from the task
+    worktree and stop for human approval before posting the final issue comment
+    or removing the worktree.
+12. If the Human Review Gate is enabled, remove the worktree only after the
+    human explicitly approves cleanup. Otherwise remove it automatically after
+    finalization.
+13. Leave the main workspace branch and files unchanged.
 
 ## Project-Specific Rules
 
@@ -278,14 +302,31 @@ When gates pass:
 2. Create any missing commit.
 3. Push the branch.
 4. Create a PR against `main` that links the issue with `Closes #<number>`.
-5. Post a final issue comment with implemented scope, verification, PR link,
+5. If the Human Review Gate is enabled, start a worktree UI review environment:
+   - Run the app from the task worktree, not the main checkout.
+   - Use the normal dev command when possible. If default ports are occupied,
+     use alternate free ports and document them.
+   - Include backend and frontend URLs, process IDs, and any special commands
+     in `finalization.md`.
+   - Open the relevant UI route in the browser when browser tooling is
+     available, and run a quick console/screenshot sanity check when practical.
+6. If the Human Review Gate is enabled, stop and ask the human to review the PR
+   and the running worktree UI. Do not continue cleanup until the human
+   explicitly says to proceed.
+7. If the human requests changes, keep the worktree, implement the requested
+   fixes, rerun verification/review/alignment/code-critic as needed, update the
+   PR branch, and return to the Human Review Gate.
+8. If the Human Review Gate is enabled and approval is granted, stop the review
+   servers unless the human asks to keep them running.
+9. Post a final issue comment with implemented scope, verification, PR link,
    and notable follow-up information.
-6. Remove the worktree.
+10. Remove the worktree.
 
 Write `finalization.md` with commit or branch status, push result, PR link,
-GitHub comment result, and worktree cleanup result. If any finalization step
-fails, attempt the smallest reasonable recovery, record the exact failure, and
-stop.
+GitHub comment result, Human Review Gate status, UI review server details when
+enabled, human approval status when applicable, and worktree cleanup result. If
+any finalization step fails, attempt the smallest reasonable recovery, record
+the exact failure, and stop.
 
 ## Common Mistakes
 
@@ -297,4 +338,6 @@ stop.
 - Editing the main workspace instead of the dedicated worktree.
 - Updating only one side of the dual-DB implementation.
 - Forgetting `.js` extensions in ESM imports.
+- Removing the worktree before explicit human approval when the Human Review
+  Gate was enabled.
 - Skipping the final GitHub issue comment.
