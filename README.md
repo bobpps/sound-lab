@@ -70,7 +70,7 @@ sound-lab/
   backend/          Fastify API server
     src/
       db/           Database abstraction layer (repository pattern)
-        local/      SQLite implementation (better-sqlite3)
+        local/      SQLite implementation (sql.js)
         supabase/   Supabase implementation (sound_lab schema)
       routes/       API endpoints
       providers/    TTS and LLM provider adapters

@@ -21,15 +21,15 @@
     "@google-cloud/text-to-speech": "^6.4.0",
     "@sinclair/typebox": "^0.34.49",
     "@supabase/supabase-js": "^2.0.0",
-    "better-sqlite3": "^11.0.0",
     "fastify": "^5.0.0",
     "fastify-plugin": "^5.1.0",
-    "openai": "^6.33.0"
+    "openai": "^6.33.0",
+    "sql.js": "^1.11.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@types/better-sqlite3": "^7.0.0",
     "@types/node": "^22.0.0",
+    "@types/sql.js": "^1.4.11",
     "@types/ws": "^8.18.1",
     "eslint": "^9.39.4",
     "globals": "^17.4.0",

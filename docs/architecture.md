@@ -74,7 +74,7 @@ sound-labs/
 The DB layer uses the **repository pattern** with two interchangeable backends:
 
 - **Supabase** (Postgres) — production, multi-user with auth
-- **Local** (SQLite via better-sqlite3) — development, single-user, zero-config
+- **Local** (SQLite via sql.js) — development, single-user, zero-config
 
 Selection is automatic: if `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` are set, Supabase is used. Otherwise, falls back to local SQLite at `./data/sound-lab.db`. Can be overridden via `DB_PROVIDER` env var.
 

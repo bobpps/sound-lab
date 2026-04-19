@@ -1,11 +1,11 @@
-import type Database from 'better-sqlite3';
+import type { WrappedDatabase } from './client.js';
 import type { Provider, CreateProvider, UpdateProvider, ProviderType } from '../types.js';
 import type { IProviderRepository } from '../interfaces.js';
 import { encrypt, decrypt } from './crypto.js';
 
 export class LocalProviderRepository implements IProviderRepository {
   constructor(
-    private db: Database.Database,
+    private db: WrappedDatabase,
     private encryptionKey: string,
   ) {}
 

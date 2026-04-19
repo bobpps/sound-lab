@@ -31,8 +31,8 @@ export async function createDatabase(config?: DbConfig): Promise<IDatabase> {
   const { LocalProviderRepository } = await import('./local/providers.js');
 
   const sqliteDb = cfg.local!.path === ':memory:'
-    ? createMemoryDb()
-    : createLocalDb(cfg.local!.path);
+    ? await createMemoryDb()
+    : await createLocalDb(cfg.local!.path);
 
   return {
     dialogs: new LocalDialogRepository(sqliteDb),

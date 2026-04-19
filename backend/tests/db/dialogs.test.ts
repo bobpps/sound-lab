@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb } from './test-helpers.js';
 import { LocalDialogRepository } from '../../src/db/local/dialogs.js';
-import type Database from 'better-sqlite3';
+import type { WrappedDatabase } from '../../src/db/local/client.js';
 
 describe('LocalDialogRepository', () => {
-  let db: Database.Database;
+  let db: WrappedDatabase;
   let repo: LocalDialogRepository;
 
-  beforeEach(() => {
-    db = createTestDb();
+  beforeEach(async () => {
+    db = await createTestDb();
     repo = new LocalDialogRepository(db);
   });
 
