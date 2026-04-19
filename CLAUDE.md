@@ -24,6 +24,7 @@ npm workspaces: `backend/`, `frontend/`. Root orchestrates via `concurrently`. E
 
 ## Important Rules
 
+- **Write GitHub issues in English.** Issue titles and descriptions must be in English, even when the surrounding conversation is in another language.
 - **Fix causes, not symptoms.** When debugging, before deciding on a fix, ask: "Is this the root cause or a consequence?" Always trace to the root cause.
 - **When in doubt, ask.** If unsure about intent, approach, or scope — ask the human before proceeding.
 - **Use subagents liberally.** Offload research, exploration, code review, and parallel tasks to subagents. Keep the main context clean for decisions and implementation.
