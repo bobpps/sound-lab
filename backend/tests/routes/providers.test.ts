@@ -53,6 +53,22 @@ describe('Provider routes', () => {
       const body = res.json();
       expect(body[0].enabled).toBe(true);
     });
+
+    it('returns safe API key presence without exposing secrets', async () => {
+      await seedProvider('google', 'Google');
+      await seedProvider('openai', 'OpenAI', 'llm');
+      await app.db.providers.setKey('openai', 'sk-secret-key-12345');
+
+      const res = await app.inject({ method: 'GET', url: '/providers' });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual([
+        expect.objectContaining({ id: 'google', has_key: false }),
+        expect.objectContaining({ id: 'openai', has_key: true }),
+      ]);
+      expect(res.body).not.toContain('encrypted_key');
+      expect(res.body).not.toContain('sk-secret-key-12345');
+    });
   });
 
   describe('GET /providers/:id', () => {
@@ -222,6 +238,175 @@ describe('Provider routes', () => {
         method: 'GET',
         url: '/providers/elevenlabs/key',
       });
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  describe('POST /providers/:id/key/test', () => {
+    it('returns not_configured when the provider has no key', async () => {
+      await seedProvider('elevenlabs', 'ElevenLabs');
+      const createTTSProvider = vi.fn();
+      (app as Record<string, unknown>).createTTSProvider = createTTSProvider;
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers/elevenlabs/key/test',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        provider_id: 'elevenlabs',
+        status: 'not_configured',
+        message: 'Add an API key before testing this provider.',
+      });
+      expect(res.json().checked_at).toEqual(expect.any(String));
+      expect(createTTSProvider).not.toHaveBeenCalled();
+    });
+
+    it('validates a saved TTS provider key', async () => {
+      await seedProvider('elevenlabs', 'ElevenLabs');
+      await app.db.providers.setKey('elevenlabs', 'test-api-key');
+      const validateCredentials = vi.fn<() => Promise<boolean>>().mockResolvedValue(true);
+      (app as Record<string, unknown>).createTTSProvider = vi.fn(() => ({
+        id: 'elevenlabs',
+        name: 'ElevenLabs',
+        getVoices: vi.fn(),
+        synthesize: vi.fn(),
+        validateCredentials,
+      }));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers/elevenlabs/key/test',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        provider_id: 'elevenlabs',
+        status: 'valid',
+        message: 'Saved API key is active.',
+      });
+      expect(validateCredentials).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns invalid when the provider rejects a saved key', async () => {
+      await seedProvider('elevenlabs', 'ElevenLabs');
+      await app.db.providers.setKey('elevenlabs', 'test-api-key');
+      (app as Record<string, unknown>).createTTSProvider = vi.fn(() => ({
+        id: 'elevenlabs',
+        name: 'ElevenLabs',
+        getVoices: vi.fn(),
+        synthesize: vi.fn(),
+        validateCredentials: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
+      }));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers/elevenlabs/key/test',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        provider_id: 'elevenlabs',
+        status: 'invalid',
+        message: 'The saved API key was rejected or lacks required access.',
+      });
+    });
+
+    it('returns invalid when a supported provider has malformed credentials', async () => {
+      await seedProvider('google', 'Google');
+      await app.db.providers.setKey('google', 'not-json');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers/google/key/test',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        provider_id: 'google',
+        status: 'invalid',
+        message: 'The saved API key was rejected or lacks required access.',
+      });
+    });
+
+    it('returns unsupported when the provider has no validation adapter', async () => {
+      await seedProvider('unsupported', 'Unsupported');
+      await app.db.providers.setKey('unsupported', 'test-api-key');
+      (app as Record<string, unknown>).createTTSProvider = vi.fn(() => {
+        throw new Error('Unsupported TTS provider: unsupported');
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers/unsupported/key/test',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        provider_id: 'unsupported',
+        status: 'unsupported',
+        message: 'This provider does not support key validation yet.',
+      });
+    });
+
+    it('uses model lookup as realtime provider validation', async () => {
+      await seedProvider('openai-realtime', 'OpenAI Realtime', 'realtime');
+      await app.db.providers.setKey('openai-realtime', 'test-api-key');
+      const getModels = vi.fn<() => Promise<string[]>>().mockResolvedValue(['gpt-realtime']);
+      (app as Record<string, unknown>).createRealtimeProvider = vi.fn(() => ({
+        id: 'openai-realtime',
+        name: 'OpenAI Realtime',
+        getModels,
+        createSession: vi.fn(),
+      }));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers/openai-realtime/key/test',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        provider_id: 'openai-realtime',
+        status: 'valid',
+        message: 'Saved API key is active.',
+      });
+      expect(getModels).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not expose secrets in validation failure messages', async () => {
+      await seedProvider('openai-realtime', 'OpenAI Realtime', 'realtime');
+      await app.db.providers.setKey('openai-realtime', 'sk-secret-key-12345');
+      (app as Record<string, unknown>).createRealtimeProvider = vi.fn(() => ({
+        id: 'openai-realtime',
+        name: 'OpenAI Realtime',
+        getModels: vi.fn<() => Promise<string[]>>().mockRejectedValue(
+          new Error('network failed with sk-secret-key-12345'),
+        ),
+        createSession: vi.fn(),
+      }));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers/openai-realtime/key/test',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        provider_id: 'openai-realtime',
+        status: 'error',
+        message: 'Unable to verify the key right now. Try again later.',
+      });
+      expect(res.body).not.toContain('sk-secret-key-12345');
+    });
+
+    it('returns 404 for a missing provider', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/providers/missing/key/test',
+      });
+
       expect(res.statusCode).toBe(404);
     });
   });

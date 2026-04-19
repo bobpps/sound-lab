@@ -12,6 +12,7 @@ export const Provider = Type.Object({
   name: Type.String(),
   type: ProviderType,
   enabled: Type.Boolean(),
+  has_key: Type.Boolean(),
   created_at: Type.String(),
 });
 export type Provider = Static<typeof Provider>;
@@ -44,3 +45,20 @@ export const GetKeyResponse = Type.Object({
   key: Type.String(),
 });
 export type GetKeyResponse = Static<typeof GetKeyResponse>;
+
+export const ProviderKeyTestStatus = Type.Union([
+  Type.Literal('valid'),
+  Type.Literal('invalid'),
+  Type.Literal('not_configured'),
+  Type.Literal('unsupported'),
+  Type.Literal('error'),
+]);
+export type ProviderKeyTestStatus = Static<typeof ProviderKeyTestStatus>;
+
+export const ProviderKeyTestResponse = Type.Object({
+  provider_id: Type.String(),
+  status: ProviderKeyTestStatus,
+  message: Type.Optional(Type.String()),
+  checked_at: Type.String(),
+});
+export type ProviderKeyTestResponse = Static<typeof ProviderKeyTestResponse>;

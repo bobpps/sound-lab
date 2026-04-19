@@ -2,9 +2,10 @@ import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
 import {
   Provider, ProviderTypeQuery, CreateProvider, UpdateProvider,
-  SetKeyBody, GetKeyResponse,
+  SetKeyBody, GetKeyResponse, ProviderKeyTestResponse as ProviderKeyTestResponseSchema,
 } from '../../schemas/provider.js';
 import { StringIdParam, ErrorResponse } from '../../schemas/common.js';
+import { createKeyTestResponse, testProviderKey } from '../../services/provider-key-validation.js';
 
 const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   // GET /providers?type=tts
@@ -35,7 +36,7 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     return reply.status(201).send(provider);
   });
 
-  // PUT /providers/:id/key — registered before /:id to avoid routing conflicts
+  // PUT /providers/:id/key - registered before /:id to avoid routing conflicts
   fastify.put('/:id/key', {
     schema: {
       params: StringIdParam,
@@ -54,7 +55,7 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     return reply.status(204).send(null);
   });
 
-  // GET /providers/:id/key — registered before /:id to avoid routing conflicts
+  // GET /providers/:id/key - registered before /:id to avoid routing conflicts
   fastify.get('/:id/key', {
     schema: {
       params: StringIdParam,
@@ -73,6 +74,36 @@ const providerRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       return reply.notFound(`No API key set for provider ${request.params.id}`);
     }
     return { key };
+  });
+
+  // POST /providers/:id/key/test - registered before /:id to avoid routing conflicts
+  fastify.post('/:id/key/test', {
+    schema: {
+      params: StringIdParam,
+      response: {
+        200: ProviderKeyTestResponseSchema,
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const provider = await fastify.db.providers.getById(request.params.id);
+    if (!provider) {
+      return reply.notFound(`Provider ${request.params.id} not found`);
+    }
+
+    const apiKey = await fastify.db.providers.getDecryptedKey(request.params.id);
+    if (!apiKey) {
+      return createKeyTestResponse(request.params.id, 'not_configured');
+    }
+
+    return testProviderKey(provider, apiKey, {
+      createTTSProvider: fastify.createTTSProvider,
+      createLLMProvider: fastify.createLLMProvider,
+      createRealtimeProvider: fastify.createRealtimeProvider,
+      onValidationError: (event) => {
+        fastify.log.warn(event, 'Provider key validation failed');
+      },
+    });
   });
 
   // GET /providers/:id

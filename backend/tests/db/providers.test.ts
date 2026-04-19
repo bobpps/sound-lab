@@ -20,9 +20,11 @@ describe('LocalProviderRepository', () => {
       expect(provider.id).toBe('elevenlabs');
       expect(provider.name).toBe('ElevenLabs');
       expect(provider.type).toBe('tts');
+      expect(provider.has_key).toBe(false);
 
       const found = await repo.getById('elevenlabs');
       expect(found?.name).toBe('ElevenLabs');
+      expect(found?.has_key).toBe(false);
     });
 
     it('returns null for non-existent id', async () => {
@@ -44,6 +46,21 @@ describe('LocalProviderRepository', () => {
       const ttsList = await repo.list('tts');
       expect(ttsList).toHaveLength(2);
       expect(ttsList.every(p => p.type === 'tts')).toBe(true);
+    });
+
+    it('includes safe API key presence without exposing encrypted keys', async () => {
+      await repo.create({ id: 'google', name: 'Google', type: 'tts' });
+      await repo.create({ id: 'openai', name: 'OpenAI', type: 'llm' });
+      await repo.setKey('openai', 'sk-secret-key-12345');
+
+      const providers = await repo.list();
+
+      expect(providers).toEqual([
+        expect.objectContaining({ id: 'google', has_key: false }),
+        expect.objectContaining({ id: 'openai', has_key: true }),
+      ]);
+      expect(JSON.stringify(providers)).not.toContain('encrypted_key');
+      expect(JSON.stringify(providers)).not.toContain('sk-secret-key-12345');
     });
   });
 
@@ -69,7 +86,9 @@ describe('LocalProviderRepository', () => {
       await repo.setKey('elevenlabs', 'sk-secret-key-12345');
 
       const decrypted = await repo.getDecryptedKey('elevenlabs');
+      const provider = await repo.getById('elevenlabs');
       expect(decrypted).toBe('sk-secret-key-12345');
+      expect(provider?.has_key).toBe(true);
     });
 
     it('returns null when no key is set', async () => {

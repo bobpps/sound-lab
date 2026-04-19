@@ -10,7 +10,22 @@ export interface Provider {
   name: string;
   type: ProviderType;
   enabled: boolean;
+  has_key: boolean;
   created_at: string;
+}
+
+export type ProviderKeyTestStatus =
+  | 'valid'
+  | 'invalid'
+  | 'not_configured'
+  | 'unsupported'
+  | 'error';
+
+export interface ProviderKeyTestResponse {
+  provider_id: string;
+  status: ProviderKeyTestStatus;
+  message?: string;
+  checked_at: string;
 }
 
 // --- Dialog ---

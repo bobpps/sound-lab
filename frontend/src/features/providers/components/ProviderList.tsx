@@ -1,6 +1,8 @@
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../../lib/api-client.ts";
 import type { ProviderType } from "../../../types/api.ts";
-import { useProviders } from "../api/queries.ts";
+import { providerKeyTestQueryKey, testProviderKey, useProviders } from "../api/queries.ts";
 import { ProviderCard } from "./ProviderCard.tsx";
 
 interface ProviderListProps {
@@ -14,7 +16,9 @@ const TYPE_LABELS: Record<ProviderType, string> = {
 };
 
 export function ProviderList({ type }: ProviderListProps) {
+  const queryClient = useQueryClient();
   const providersQuery = useProviders(type);
+  const [isTestingAll, setIsTestingAll] = useState(false);
 
   if (providersQuery.isPending) {
     return (
@@ -48,11 +52,51 @@ export function ProviderList({ type }: ProviderListProps) {
     );
   }
 
+  const configuredProviders = providersQuery.data.filter((provider) => provider.has_key);
+
+  async function handleTestAll() {
+    if (configuredProviders.length === 0) {
+      return;
+    }
+
+    setIsTestingAll(true);
+    try {
+      await Promise.allSettled(
+        configuredProviders.map((provider) => (
+          queryClient.fetchQuery({
+            queryKey: providerKeyTestQueryKey(provider.id),
+            queryFn: () => testProviderKey(provider.id),
+          })
+        )),
+      );
+    } finally {
+      setIsTestingAll(false);
+    }
+  }
+
   return (
-    <div className="grid gap-4">
-      {providersQuery.data.map((provider) => (
-        <ProviderCard key={provider.id} provider={provider} />
-      ))}
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-gray-600">
+          {configuredProviders.length} of {providersQuery.data.length} providers have a saved API key.
+        </p>
+        <button
+          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+          disabled={configuredProviders.length === 0 || isTestingAll}
+          type="button"
+          onClick={() => {
+            void handleTestAll();
+          }}
+        >
+          {isTestingAll ? "Testing..." : "Test All"}
+        </button>
+      </div>
+
+      <div className="grid gap-4">
+        {providersQuery.data.map((provider) => (
+          <ProviderCard key={provider.id} provider={provider} />
+        ))}
+      </div>
     </div>
   );
 }
