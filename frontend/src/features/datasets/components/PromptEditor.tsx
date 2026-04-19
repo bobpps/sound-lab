@@ -43,6 +43,7 @@ function getProviderOptions(
       name: currentProviderId,
       type: "tts",
       enabled: false,
+      has_key: false,
       created_at: "",
     },
   ];

@@ -3,6 +3,22 @@ import type { Provider, CreateProvider, UpdateProvider, ProviderType } from '../
 import type { IProviderRepository } from '../interfaces.js';
 import { encrypt, decrypt } from './crypto.js';
 
+type ProviderRow = Omit<Provider, 'enabled' | 'has_key'> & {
+  enabled: number | boolean;
+  has_key: number | boolean;
+};
+
+const PROVIDER_SELECT =
+  'id, name, type, enabled, created_at, (encrypted_key IS NOT NULL) AS has_key';
+
+function mapProvider(row: ProviderRow): Provider {
+  return {
+    ...row,
+    enabled: Boolean(row.enabled),
+    has_key: Boolean(row.has_key),
+  };
+}
+
 export class LocalProviderRepository implements IProviderRepository {
   constructor(
     private db: Database.Database,
@@ -11,21 +27,22 @@ export class LocalProviderRepository implements IProviderRepository {
 
   async list(type?: ProviderType): Promise<Provider[]> {
     if (type) {
-      return this.db
-        .prepare('SELECT id, name, type, enabled, created_at FROM providers WHERE type = ? ORDER BY name')
-        .all(type) as Provider[];
+      const rows = this.db
+        .prepare(`SELECT ${PROVIDER_SELECT} FROM providers WHERE type = ? ORDER BY name`)
+        .all(type) as ProviderRow[];
+      return rows.map(mapProvider);
     }
-    return this.db
-      .prepare('SELECT id, name, type, enabled, created_at FROM providers ORDER BY name')
-      .all() as Provider[];
+    const rows = this.db
+      .prepare(`SELECT ${PROVIDER_SELECT} FROM providers ORDER BY name`)
+      .all() as ProviderRow[];
+    return rows.map(mapProvider);
   }
 
   async getById(id: string): Promise<Provider | null> {
-    return (
-      this.db
-        .prepare('SELECT id, name, type, enabled, created_at FROM providers WHERE id = ?')
-        .get(id) as Provider
-    ) ?? null;
+    const row = this.db
+      .prepare(`SELECT ${PROVIDER_SELECT} FROM providers WHERE id = ?`)
+      .get(id) as ProviderRow | undefined;
+    return row ? mapProvider(row) : null;
   }
 
   async create(data: CreateProvider): Promise<Provider> {
@@ -41,7 +58,7 @@ export class LocalProviderRepository implements IProviderRepository {
     this.db.prepare('UPDATE providers SET name = ?, type = ?, enabled = ? WHERE id = ?').run(
       data.name ?? current.name,
       data.type ?? current.type,
-      data.enabled !== undefined ? (data.enabled ? 1 : 0) : current.enabled,
+      data.enabled !== undefined ? (data.enabled ? 1 : 0) : (current.enabled ? 1 : 0),
       id,
     );
     return (await this.getById(id))!;

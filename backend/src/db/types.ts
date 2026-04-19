@@ -7,6 +7,7 @@ export interface Provider {
   name: string;
   type: ProviderType;
   enabled: boolean;
+  has_key: boolean;
   created_at: string;
 }
 
