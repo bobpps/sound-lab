@@ -35,6 +35,16 @@ function buildUrl(path: string): string {
   return `${BASE_URL}${path}`;
 }
 
+function buildJsonHeaders(hasBody: boolean): HeadersInit {
+  const headers: Record<string, string> = { 'Accept': 'application/json' };
+
+  if (hasBody) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  return headers;
+}
+
 export const api = {
   async get<T>(path: string): Promise<T> {
     const response = await fetch(buildUrl(path), {
@@ -45,25 +55,21 @@ export const api = {
   },
 
   async post<T>(path: string, body?: unknown): Promise<T> {
+    const hasBody = body !== undefined;
     const response = await fetch(buildUrl(path), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: buildJsonHeaders(hasBody),
+      body: hasBody ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(response);
   },
 
   async put<T>(path: string, body?: unknown): Promise<T> {
+    const hasBody = body !== undefined;
     const response = await fetch(buildUrl(path), {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: buildJsonHeaders(hasBody),
+      body: hasBody ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(response);
   },
