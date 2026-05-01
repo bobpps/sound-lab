@@ -13,27 +13,41 @@ interface FakeWorkletMessage {
 
 class FakeAudioWorkletPort {
   onmessage: ((event: FakeWorkletMessage) => void) | null = null;
+  deferFlush = false;
   flushSamples = new Float32Array(0);
   postMessage = vi.fn((message: { type?: string }) => {
     if (message.type === "flush") {
-      this.onmessage?.({
-        data: {
-          sampleRate: 16_000,
-          samples: this.flushSamples,
-          type: "flushed",
-        },
-      });
+      if (this.deferFlush) {
+        return;
+      }
+
+      this.flush();
     }
   });
+
+  flush() {
+    this.onmessage?.({
+      data: {
+        sampleRate: 16_000,
+        samples: this.flushSamples,
+        type: "flushed",
+      },
+    });
+  }
 }
 
 class FakeAudioWorkletNode {
   static instance: FakeAudioWorkletNode | null = null;
+  static shouldThrow = false;
 
   readonly port = new FakeAudioWorkletPort();
   disconnect = vi.fn();
 
   constructor() {
+    if (FakeAudioWorkletNode.shouldThrow) {
+      throw new Error("Unable to create worklet node");
+    }
+
     FakeAudioWorkletNode.instance = this;
   }
 }
@@ -70,6 +84,16 @@ function TestHarness({ onChunk }: { onChunk: (chunk: Uint8Array) => void }) {
   );
 }
 
+function HookProbe({
+  onRender,
+}: {
+  onRender: (microphone: ReturnType<typeof useMicrophone>) => void;
+}) {
+  const microphone = useMicrophone();
+  onRender(microphone);
+  return null;
+}
+
 describe("useMicrophone", () => {
   const getUserMedia = vi.fn<() => Promise<MediaStream>>();
   const trackStop = vi.fn();
@@ -79,6 +103,7 @@ describe("useMicrophone", () => {
 
   beforeEach(() => {
     FakeAudioWorkletNode.instance = null;
+    FakeAudioWorkletNode.shouldThrow = false;
     sourceNode = new FakeMediaStreamSourceNode();
     addModule.mockResolvedValue(undefined);
 
@@ -169,6 +194,54 @@ describe("useMicrophone", () => {
     expect(onChunk.mock.calls[0]?.[0]).toBeInstanceOf(Uint8Array);
     expect(onChunk.mock.calls[0]?.[0]).toHaveLength(4);
     expect(workletNode!.disconnect).toHaveBeenCalled();
+    expect(sourceNode.disconnect).toHaveBeenCalled();
+    expect(trackStop).toHaveBeenCalled();
+  });
+
+  it("returns the same in-flight stop promise for concurrent stop calls", async () => {
+    let microphone: ReturnType<typeof useMicrophone> | null = null;
+
+    render(<HookProbe onRender={(nextMicrophone) => {
+      microphone = nextMicrophone;
+    }} />);
+
+    await act(async () => {
+      await microphone!.start({ onChunk: vi.fn() });
+    });
+
+    const workletNode = FakeAudioWorkletNode.instance;
+    expect(workletNode).not.toBeNull();
+    workletNode!.port.deferFlush = true;
+
+    const firstStop = microphone!.stop();
+    const secondStop = microphone!.stop();
+
+    expect(secondStop).toBe(firstStop);
+    expect(workletNode!.port.postMessage).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      workletNode!.port.flush();
+    });
+
+    await firstStop;
+    await secondStop;
+    expect(workletNode!.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops the acquired stream if worklet node creation fails", async () => {
+    let microphone: ReturnType<typeof useMicrophone> | null = null;
+    FakeAudioWorkletNode.shouldThrow = true;
+
+    render(<HookProbe onRender={(nextMicrophone) => {
+      microphone = nextMicrophone;
+    }} />);
+
+    await expect(
+      act(async () => {
+        await microphone!.start({ onChunk: vi.fn() });
+      }),
+    ).rejects.toThrow("Unable to create worklet node");
+
     expect(sourceNode.disconnect).toHaveBeenCalled();
     expect(trackStop).toHaveBeenCalled();
   });

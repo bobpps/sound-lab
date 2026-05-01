@@ -168,46 +168,68 @@ export function useMicrophone(): UseMicrophoneResult {
   const chunkHandlerRef = useRef<UseMicrophoneStartOptions["onChunk"]>(undefined);
   const flushResolverRef = useRef<(() => void) | null>(null);
   const pendingChunkSendsRef = useRef<Promise<void>>(Promise.resolve());
+  const stopPromiseRef = useRef<Promise<void> | null>(null);
 
   const [chunks, setChunks] = useState<Uint8Array[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
 
-  const stop = useCallback(async () => {
-    if (sourceNodeRef.current) {
-      sourceNodeRef.current.disconnect();
-      sourceNodeRef.current = null;
+  const stop = useCallback((): Promise<void> => {
+    if (stopPromiseRef.current) {
+      return stopPromiseRef.current;
     }
 
-    if (streamRef.current) {
-      for (const track of streamRef.current.getTracks()) {
-        track.stop();
+    const stopPromise = (async () => {
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
       }
-      streamRef.current = null;
-    }
 
-    const workletNode = workletNodeRef.current;
-    if (workletNode) {
-      await new Promise<void>((resolve) => {
-        flushResolverRef.current = () => {
-          resolve();
-        };
-
-        try {
-          workletNode.port.postMessage({ type: "flush" });
-        } catch {
-          flushResolverRef.current = null;
-          resolve();
+      if (streamRef.current) {
+        for (const track of streamRef.current.getTracks()) {
+          track.stop();
         }
-      });
+        streamRef.current = null;
+      }
 
-      workletNode.port.onmessage = null;
-      workletNode.disconnect();
-      workletNodeRef.current = null;
-    }
+      const workletNode = workletNodeRef.current;
+      if (workletNode) {
+        await new Promise<void>((resolve) => {
+          let isSettled = false;
+          const timeoutId = window.setTimeout(finish, 500);
+          function finish() {
+            if (isSettled) {
+              return;
+            }
 
-    chunkHandlerRef.current = undefined;
-    setIsRecording(false);
+            isSettled = true;
+            window.clearTimeout(timeoutId);
+            flushResolverRef.current = null;
+            resolve();
+          }
+
+          flushResolverRef.current = finish;
+
+          try {
+            workletNode.port.postMessage({ type: "flush" });
+          } catch {
+            finish();
+          }
+        });
+
+        workletNode.port.onmessage = null;
+        workletNode.disconnect();
+        workletNodeRef.current = null;
+      }
+
+      chunkHandlerRef.current = undefined;
+      setIsRecording(false);
+    })().finally(() => {
+      stopPromiseRef.current = null;
+    });
+
+    stopPromiseRef.current = stopPromise;
+    return stopPromise;
   }, []);
 
   const start = useCallback(async (options: UseMicrophoneStartOptions = {}) => {
@@ -253,15 +275,31 @@ export function useMicrophone(): UseMicrophoneResult {
       throw new Error(message);
     }
 
-    const sourceNode = audioContext.createMediaStreamSource(stream);
-    const workletNode = new AudioWorkletNode(
-      audioContext,
-      MICROPHONE_WORKLET_NAME,
-      {
-        numberOfInputs: 1,
-        numberOfOutputs: 0,
-      },
-    );
+    let sourceNode: MediaStreamAudioSourceNode | null = null;
+    let workletNode: AudioWorkletNode | null = null;
+    try {
+      sourceNode = audioContext.createMediaStreamSource(stream);
+      workletNode = new AudioWorkletNode(
+        audioContext,
+        MICROPHONE_WORKLET_NAME,
+        {
+          numberOfInputs: 1,
+          numberOfOutputs: 0,
+        },
+      );
+    } catch (nodeError) {
+      sourceNode?.disconnect();
+      for (const track of stream.getTracks()) {
+        track.stop();
+      }
+
+      const message =
+        nodeError instanceof Error
+          ? nodeError.message
+          : "Unable to initialize microphone audio processing.";
+      setError(message);
+      throw new Error(message);
+    }
 
     chunkHandlerRef.current = options.onChunk;
     streamRef.current = stream;
@@ -324,12 +362,12 @@ export function useMicrophone(): UseMicrophoneResult {
 
   useEffect(() => {
     return () => {
-      void stop();
-
-      if (audioContextRef.current) {
-        void audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
+      void stop().finally(() => {
+        if (audioContextRef.current) {
+          void audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+      });
     };
   }, [stop]);
 
