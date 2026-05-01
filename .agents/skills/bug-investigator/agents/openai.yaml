@@ -1,0 +1,19 @@
+interface:
+  display_name: "Bug Investigator"
+  short_description: "Create, reproduce, and analyze bugs"
+  default_prompt: "Use $bug-investigator to collect a bug report, create a GitHub issue in English, reproduce it with DevTools, and document the root cause."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "github"
+      description: "GitHub access for creating and updating bug issues"
+    - type: "mcp"
+      value: "playwright"
+      description: "Browser automation for stable bug reproduction"
+    - type: "mcp"
+      value: "chrome-devtools"
+      description: "Browser inspection for console, network, and DOM analysis"
+
+policy:
+  allow_implicit_invocation: false

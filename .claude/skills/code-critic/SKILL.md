@@ -2,7 +2,7 @@
 name: code-critic
 description: >
   Harsh architectural critic for sound-lab code. Analyzes recent changes and ruthlessly points out architectural violations, pattern misuse, bad abstractions, and other issues. Invoked ONLY by explicit user command (/code-critic). Never trigger this skill automatically.
-user_invocable: true
+user-invocable: true
 ---
 
 # Code Critic

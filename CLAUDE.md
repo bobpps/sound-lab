@@ -30,3 +30,4 @@ npm workspaces: `backend/`, `frontend/`. Root orchestrates via `concurrently`. E
 - **Use subagents liberally.** Offload research, exploration, code review, and parallel tasks to subagents. Keep the main context clean for decisions and implementation.
 - **TDD by default.** Write tests first, then implement. Red → Green → Refactor.
 - **Verify UI with Playwright.** After every UI-related task, open the page in Playwright browser, take a screenshot to confirm the result matches expectations, and check the browser console for errors/warnings.
+- **Use the right browser MCP for UI bugs.** Use Playwright MCP first to reproduce UI bugs with a stable step-by-step flow. Use DevTools MCP to research the cause by inspecting console errors, network requests, DOM state, and page snapshots. After fixing the issue, verify the regression with Playwright MCP again.
