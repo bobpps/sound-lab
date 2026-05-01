@@ -7,11 +7,24 @@ interface FakeWorkletMessage {
   data: {
     sampleRate: number;
     samples: Float32Array;
+    type?: string;
   };
 }
 
 class FakeAudioWorkletPort {
   onmessage: ((event: FakeWorkletMessage) => void) | null = null;
+  flushSamples = new Float32Array(0);
+  postMessage = vi.fn((message: { type?: string }) => {
+    if (message.type === "flush") {
+      this.onmessage?.({
+        data: {
+          sampleRate: 16_000,
+          samples: this.flushSamples,
+          type: "flushed",
+        },
+      });
+    }
+  });
 }
 
 class FakeAudioWorkletNode {
@@ -43,7 +56,12 @@ function TestHarness({ onChunk }: { onChunk: (chunk: Uint8Array) => void }) {
       >
         Start
       </button>
-      <button type="button" onClick={microphone.stop}>
+      <button
+        type="button"
+        onClick={() => {
+          void microphone.stop();
+        }}
+      >
         Stop
       </button>
       <span data-testid="chunk-count">{microphone.chunks.length}</span>
@@ -115,6 +133,7 @@ describe("useMicrophone", () => {
         data: {
           sampleRate: 16_000,
           samples: new Float32Array([0, 0.5, -0.5]),
+          type: "chunk",
         },
       });
     });
@@ -126,5 +145,31 @@ describe("useMicrophone", () => {
     expect(screen.getByTestId("chunk-count")).toHaveTextContent("1");
     expect(sourceNode.connect).toHaveBeenCalledWith(FakeAudioWorkletNode.instance);
     expect(decodeAudioData).not.toHaveBeenCalled();
+  });
+
+  it("flushes trailing worklet samples before stopping capture", async () => {
+    const user = userEvent.setup();
+    const onChunk =
+      vi.fn<(chunk: Uint8Array) => Promise<void>>().mockResolvedValue(undefined);
+
+    render(<TestHarness onChunk={onChunk} />);
+
+    await user.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(addModule).toHaveBeenCalled());
+
+    const workletNode = FakeAudioWorkletNode.instance;
+    expect(workletNode).not.toBeNull();
+    workletNode!.port.flushSamples = new Float32Array([0.25, -0.25]);
+
+    await user.click(screen.getByRole("button", { name: "Stop" }));
+
+    await waitFor(() => expect(onChunk).toHaveBeenCalledTimes(1));
+
+    expect(workletNode!.port.postMessage).toHaveBeenCalledWith({ type: "flush" });
+    expect(onChunk.mock.calls[0]?.[0]).toBeInstanceOf(Uint8Array);
+    expect(onChunk.mock.calls[0]?.[0]).toHaveLength(4);
+    expect(workletNode!.disconnect).toHaveBeenCalled();
+    expect(sourceNode.disconnect).toHaveBeenCalled();
+    expect(trackStop).toHaveBeenCalled();
   });
 });

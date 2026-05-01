@@ -8,6 +8,25 @@ class RealtimeMicrophoneProcessor extends AudioWorkletProcessor {
     super();
     this.buffer = new Float32Array(4096);
     this.offset = 0;
+    this.port.onmessage = (event) => {
+      if (event.data?.type === "flush") {
+        this.flush();
+      }
+    };
+  }
+
+  flush() {
+    const samples = this.offset > 0
+      ? this.buffer.slice(0, this.offset)
+      : new Float32Array(0);
+
+    this.port.postMessage(
+      { type: "flushed", sampleRate, samples },
+      [samples.buffer],
+    );
+
+    this.buffer = new Float32Array(4096);
+    this.offset = 0;
   }
 
   process(inputs) {
@@ -28,7 +47,10 @@ class RealtimeMicrophoneProcessor extends AudioWorkletProcessor {
 
       if (this.offset === this.buffer.length) {
         const samples = this.buffer;
-        this.port.postMessage({ sampleRate, samples }, [samples.buffer]);
+        this.port.postMessage(
+          { type: "chunk", sampleRate, samples },
+          [samples.buffer],
+        );
         this.buffer = new Float32Array(4096);
         this.offset = 0;
       }
@@ -52,7 +74,7 @@ interface UseMicrophoneResult {
   error: string | null;
   isRecording: boolean;
   start: (options?: UseMicrophoneStartOptions) => Promise<void>;
-  stop: () => void;
+  stop: () => Promise<void>;
 }
 
 type AudioContextConstructor = new (options?: AudioContextOptions) => AudioContext;
@@ -144,18 +166,14 @@ export function useMicrophone(): UseMicrophoneResult {
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const chunkHandlerRef = useRef<UseMicrophoneStartOptions["onChunk"]>(undefined);
+  const flushResolverRef = useRef<(() => void) | null>(null);
+  const pendingChunkSendsRef = useRef<Promise<void>>(Promise.resolve());
 
   const [chunks, setChunks] = useState<Uint8Array[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
 
-  const stop = useCallback(() => {
-    if (workletNodeRef.current) {
-      workletNodeRef.current.port.onmessage = null;
-      workletNodeRef.current.disconnect();
-      workletNodeRef.current = null;
-    }
-
+  const stop = useCallback(async () => {
     if (sourceNodeRef.current) {
       sourceNodeRef.current.disconnect();
       sourceNodeRef.current = null;
@@ -166,6 +184,26 @@ export function useMicrophone(): UseMicrophoneResult {
         track.stop();
       }
       streamRef.current = null;
+    }
+
+    const workletNode = workletNodeRef.current;
+    if (workletNode) {
+      await new Promise<void>((resolve) => {
+        flushResolverRef.current = () => {
+          resolve();
+        };
+
+        try {
+          workletNode.port.postMessage({ type: "flush" });
+        } catch {
+          flushResolverRef.current = null;
+          resolve();
+        }
+      });
+
+      workletNode.port.onmessage = null;
+      workletNode.disconnect();
+      workletNodeRef.current = null;
     }
 
     chunkHandlerRef.current = undefined;
@@ -187,7 +225,7 @@ export function useMicrophone(): UseMicrophoneResult {
       throw new Error("Audio processing is not supported in this browser.");
     }
 
-    stop();
+    await stop();
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
@@ -237,8 +275,13 @@ export function useMicrophone(): UseMicrophoneResult {
     workletNode.port.onmessage = (event: MessageEvent<{
       sampleRate?: number;
       samples?: Float32Array;
+      type?: string;
     }>) => {
       if (!workletNodeRef.current || !(event.data.samples instanceof Float32Array)) {
+        if (event.data.type === "flushed") {
+          flushResolverRef.current?.();
+          flushResolverRef.current = null;
+        }
         return;
       }
 
@@ -249,23 +292,31 @@ export function useMicrophone(): UseMicrophoneResult {
       );
       const pcmChunk = floatToPcm16(resampled);
 
-      if (pcmChunk.byteLength === 0) {
-        return;
-      }
+      pendingChunkSendsRef.current = pendingChunkSendsRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (pcmChunk.byteLength === 0) {
+            return;
+          }
 
-      setChunks((currentChunks) => [...currentChunks, pcmChunk]);
-
-      void (async () => {
-        try {
+          setChunks((currentChunks) => [...currentChunks, pcmChunk]);
           await chunkHandlerRef.current?.(pcmChunk);
-        } catch (processingError) {
+        })
+        .catch((processingError) => {
           const message =
             processingError instanceof Error
               ? processingError.message
               : "Unable to process microphone audio.";
           setError(message);
-        }
-      })();
+        })
+        .finally(() => {
+          if (event.data.type === "flushed") {
+            flushResolverRef.current?.();
+            flushResolverRef.current = null;
+          }
+        });
+
+      void pendingChunkSendsRef.current;
     };
 
     sourceNode.connect(workletNode);
@@ -273,7 +324,7 @@ export function useMicrophone(): UseMicrophoneResult {
 
   useEffect(() => {
     return () => {
-      stop();
+      void stop();
 
       if (audioContextRef.current) {
         void audioContextRef.current.close();
