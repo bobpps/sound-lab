@@ -8,7 +8,7 @@ import type {
 } from './types.js';
 
 const INWORLD_BASE_URL = 'https://api.inworld.ai';
-const INWORLD_MODELS_URL = `${INWORLD_BASE_URL}/v1/models`;
+const INWORLD_MODELS_URL = `${INWORLD_BASE_URL}/llm/v1alpha/models`;
 const INWORLD_REALTIME_URL = 'wss://api.inworld.ai/api/v1/realtime/session';
 const DEFAULT_REALTIME_MODEL = 'google-ai-studio/gemini-2.5-flash';
 const DEFAULT_VOICE = 'Dennis';
@@ -268,14 +268,14 @@ export class InworldRealtimeProvider implements IRealtimeProvider {
     }
 
     const models = new Set<string>();
-    const items = Array.isArray(body.data) ? body.data : [];
+    const items = Array.isArray(body.models) ? body.models : [];
 
     for (const item of items) {
-      if (!isRecord(item) || typeof item.id !== 'string' || !item.id) {
+      if (!isRecord(item) || typeof item.model !== 'string' || !item.model) {
         continue;
       }
 
-      models.add(item.id);
+      models.add(item.model);
     }
 
     return models.size > 0 ? [...models].sort() : [DEFAULT_REALTIME_MODEL];

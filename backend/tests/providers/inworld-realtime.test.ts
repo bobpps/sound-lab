@@ -121,13 +121,13 @@ describe('InworldRealtimeProvider', () => {
     expect(provider.name).toBe('Inworld Realtime');
   });
 
-  it('lists available Inworld models from the OpenAI-compatible models endpoint', async () => {
+  it('lists available Inworld models from the Inworld models endpoint', async () => {
     mockFetch.mockResolvedValueOnce(createJsonResponse({
-      data: [
-        { id: 'openai/gpt-4.1-nano' },
-        { id: 'google-ai-studio/gemini-2.5-flash' },
-        { id: 'openai/gpt-4.1-nano' },
-        { id: 123 },
+      models: [
+        { model: 'openai/gpt-4.1-nano' },
+        { model: 'google-ai-studio/gemini-2.5-flash' },
+        { model: 'openai/gpt-4.1-nano' },
+        { model: 123 },
         {},
       ],
     }));
@@ -138,7 +138,7 @@ describe('InworldRealtimeProvider', () => {
     ]);
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.inworld.ai/v1/models',
+      'https://api.inworld.ai/llm/v1alpha/models',
       {
         headers: {
           Authorization: 'Basic test-api-key',
