@@ -1,7 +1,7 @@
 interface:
   display_name: "Bug Investigator"
   short_description: "Create, reproduce, and analyze bugs"
-  default_prompt: "Use $bug-investigator to collect a bug report, create a GitHub issue in English, reproduce it with DevTools, and document the root cause."
+  default_prompt: "Use $bug-investigator to collect a bug report, create a GitHub issue in English, create its branch and worktree, reproduce it with DevTools, and document the root cause."
 
 dependencies:
   tools:
