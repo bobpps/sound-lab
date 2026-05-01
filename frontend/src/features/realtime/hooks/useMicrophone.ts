@@ -1,11 +1,72 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const TARGET_SAMPLE_RATE = 16_000;
+const MICROPHONE_WORKLET_NAME = "realtime-microphone-processor";
+const MICROPHONE_WORKLET_SOURCE = `
+class RealtimeMicrophoneProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.buffer = new Float32Array(4096);
+    this.offset = 0;
+    this.port.onmessage = (event) => {
+      if (event.data?.type === "flush") {
+        this.flush();
+      }
+    };
+  }
+
+  flush() {
+    const samples = this.offset > 0
+      ? this.buffer.slice(0, this.offset)
+      : new Float32Array(0);
+
+    this.port.postMessage(
+      { type: "flushed", sampleRate, samples },
+      [samples.buffer],
+    );
+
+    this.buffer = new Float32Array(4096);
+    this.offset = 0;
+  }
+
+  process(inputs) {
+    const channels = inputs[0];
+    if (!channels || channels.length === 0 || channels[0].length === 0) {
+      return true;
+    }
+
+    const frameCount = channels[0].length;
+    for (let frame = 0; frame < frameCount; frame += 1) {
+      let sample = 0;
+      for (let channel = 0; channel < channels.length; channel += 1) {
+        sample += channels[channel][frame] / channels.length;
+      }
+
+      this.buffer[this.offset] = sample;
+      this.offset += 1;
+
+      if (this.offset === this.buffer.length) {
+        const samples = this.buffer;
+        this.port.postMessage(
+          { type: "chunk", sampleRate, samples },
+          [samples.buffer],
+        );
+        this.buffer = new Float32Array(4096);
+        this.offset = 0;
+      }
+    }
+
+    return true;
+  }
+}
+
+registerProcessor("${MICROPHONE_WORKLET_NAME}", RealtimeMicrophoneProcessor);
+`;
+
+const loadedAudioWorklets = new WeakSet<AudioContext>();
 
 export interface UseMicrophoneStartOptions {
-  mimeType?: string;
   onChunk?: (chunk: Uint8Array) => void | Promise<void>;
-  timeSliceMs?: number;
 }
 
 interface UseMicrophoneResult {
@@ -13,61 +74,19 @@ interface UseMicrophoneResult {
   error: string | null;
   isRecording: boolean;
   start: (options?: UseMicrophoneStartOptions) => Promise<void>;
-  stop: () => void;
+  stop: () => Promise<void>;
 }
 
-type RecorderWithMimeSupport = typeof MediaRecorder & {
-  isTypeSupported?: (mimeType: string) => boolean;
-};
+type AudioContextConstructor = new (options?: AudioContextOptions) => AudioContext;
 
-function getAudioContextConstructor():
-  | (new () => AudioContext)
-  | undefined {
+function getAudioContextConstructor(): AudioContextConstructor | undefined {
   if (typeof window === "undefined") {
     return undefined;
   }
 
   return window.AudioContext ?? (window as typeof window & {
-    webkitAudioContext?: new () => AudioContext;
+    webkitAudioContext?: AudioContextConstructor;
   }).webkitAudioContext;
-}
-
-function chooseRecorderMimeType(preferred?: string): string | undefined {
-  if (typeof MediaRecorder === "undefined") {
-    return undefined;
-  }
-
-  const recorder = MediaRecorder as RecorderWithMimeSupport;
-  const supported = recorder.isTypeSupported?.bind(recorder);
-
-  const candidates = [
-    preferred,
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/ogg;codecs=opus",
-  ].filter((value): value is string => Boolean(value));
-
-  if (!supported) {
-    return candidates[0];
-  }
-
-  return candidates.find((mimeType) => supported(mimeType));
-}
-
-function mixToMono(audioBuffer: AudioBuffer): Float32Array {
-  if (audioBuffer.numberOfChannels === 1) {
-    return audioBuffer.getChannelData(0);
-  }
-
-  const mono = new Float32Array(audioBuffer.length);
-  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
-    const channelData = audioBuffer.getChannelData(channel);
-    for (let index = 0; index < channelData.length; index += 1) {
-      mono[index] += channelData[index] / audioBuffer.numberOfChannels;
-    }
-  }
-
-  return mono;
 }
 
 function downsampleBuffer(
@@ -120,55 +139,103 @@ function floatToPcm16(input: Float32Array): Uint8Array {
   return new Uint8Array(view.buffer);
 }
 
-async function convertBlobToPcm16(
-  blob: Blob,
-  audioContext: AudioContext,
-): Promise<Uint8Array> {
-  const sourceBuffer = await blob.arrayBuffer();
-  const decodedBuffer = await audioContext.decodeAudioData(sourceBuffer.slice(0));
-  const mono = mixToMono(decodedBuffer);
-  const resampled = downsampleBuffer(
-    mono,
-    decodedBuffer.sampleRate,
-    TARGET_SAMPLE_RATE,
+async function loadMicrophoneWorklet(audioContext: AudioContext): Promise<void> {
+  if (loadedAudioWorklets.has(audioContext)) {
+    return;
+  }
+
+  if (!audioContext.audioWorklet) {
+    throw new Error("AudioWorklet microphone processing is not supported in this browser.");
+  }
+
+  const moduleUrl = URL.createObjectURL(
+    new Blob([MICROPHONE_WORKLET_SOURCE], { type: "text/javascript" }),
   );
 
-  return floatToPcm16(resampled);
+  try {
+    await audioContext.audioWorklet.addModule(moduleUrl);
+    loadedAudioWorklets.add(audioContext);
+  } finally {
+    URL.revokeObjectURL(moduleUrl);
+  }
 }
 
 export function useMicrophone(): UseMicrophoneResult {
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const chunkHandlerRef = useRef<UseMicrophoneStartOptions["onChunk"]>(undefined);
+  const flushResolverRef = useRef<(() => void) | null>(null);
+  const pendingChunkSendsRef = useRef<Promise<void>>(Promise.resolve());
+  const stopPromiseRef = useRef<Promise<void> | null>(null);
 
   const [chunks, setChunks] = useState<Uint8Array[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
 
-  const stop = useCallback(() => {
-    const recorder = recorderRef.current;
-    recorderRef.current = null;
-
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
+  const stop = useCallback((): Promise<void> => {
+    if (stopPromiseRef.current) {
+      return stopPromiseRef.current;
     }
 
-    if (streamRef.current) {
-      for (const track of streamRef.current.getTracks()) {
-        track.stop();
+    const stopPromise = (async () => {
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
       }
-      streamRef.current = null;
-    }
 
-    setIsRecording(false);
+      if (streamRef.current) {
+        for (const track of streamRef.current.getTracks()) {
+          track.stop();
+        }
+        streamRef.current = null;
+      }
+
+      const workletNode = workletNodeRef.current;
+      if (workletNode) {
+        await new Promise<void>((resolve) => {
+          let isSettled = false;
+          const timeoutId = window.setTimeout(finish, 500);
+          function finish() {
+            if (isSettled) {
+              return;
+            }
+
+            isSettled = true;
+            window.clearTimeout(timeoutId);
+            flushResolverRef.current = null;
+            resolve();
+          }
+
+          flushResolverRef.current = finish;
+
+          try {
+            workletNode.port.postMessage({ type: "flush" });
+          } catch {
+            finish();
+          }
+        });
+
+        workletNode.port.onmessage = null;
+        workletNode.disconnect();
+        workletNodeRef.current = null;
+      }
+
+      chunkHandlerRef.current = undefined;
+      setIsRecording(false);
+    })().finally(() => {
+      stopPromiseRef.current = null;
+    });
+
+    stopPromiseRef.current = stopPromise;
+    return stopPromise;
   }, []);
 
   const start = useCallback(async (options: UseMicrophoneStartOptions = {}) => {
     if (
       typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.getUserMedia ||
-      typeof MediaRecorder === "undefined"
+      !navigator.mediaDevices?.getUserMedia
     ) {
       setError("Microphone capture is not supported in this browser.");
       throw new Error("Microphone capture is not supported in this browser.");
@@ -180,78 +247,127 @@ export function useMicrophone(): UseMicrophoneResult {
       throw new Error("Audio processing is not supported in this browser.");
     }
 
-    stop();
+    await stop();
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mimeType = chooseRecorderMimeType(options.mimeType);
-    const recorder = mimeType
-      ? new MediaRecorder(stream, { mimeType })
-      : new MediaRecorder(stream);
 
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContextCtor();
     }
 
+    if (audioContextRef.current.state === "suspended") {
+      await audioContextRef.current.resume();
+    }
+
+    const audioContext = audioContextRef.current;
+    try {
+      await loadMicrophoneWorklet(audioContext);
+    } catch (workletError) {
+      for (const track of stream.getTracks()) {
+        track.stop();
+      }
+
+      const message =
+        workletError instanceof Error
+          ? workletError.message
+          : "Unable to initialize microphone audio processing.";
+      setError(message);
+      throw new Error(message);
+    }
+
+    let sourceNode: MediaStreamAudioSourceNode | null = null;
+    let workletNode: AudioWorkletNode | null = null;
+    try {
+      sourceNode = audioContext.createMediaStreamSource(stream);
+      workletNode = new AudioWorkletNode(
+        audioContext,
+        MICROPHONE_WORKLET_NAME,
+        {
+          numberOfInputs: 1,
+          numberOfOutputs: 0,
+        },
+      );
+    } catch (nodeError) {
+      sourceNode?.disconnect();
+      for (const track of stream.getTracks()) {
+        track.stop();
+      }
+
+      const message =
+        nodeError instanceof Error
+          ? nodeError.message
+          : "Unable to initialize microphone audio processing.";
+      setError(message);
+      throw new Error(message);
+    }
+
     chunkHandlerRef.current = options.onChunk;
     streamRef.current = stream;
-    recorderRef.current = recorder;
+    sourceNodeRef.current = sourceNode;
+    workletNodeRef.current = workletNode;
 
     setChunks([]);
     setError(null);
     setIsRecording(true);
 
-    recorder.ondataavailable = (event) => {
-      if (event.data.size === 0 || !audioContextRef.current) {
+    workletNode.port.onmessage = (event: MessageEvent<{
+      sampleRate?: number;
+      samples?: Float32Array;
+      type?: string;
+    }>) => {
+      if (!workletNodeRef.current || !(event.data.samples instanceof Float32Array)) {
+        if (event.data.type === "flushed") {
+          flushResolverRef.current?.();
+          flushResolverRef.current = null;
+        }
         return;
       }
 
-      void (async () => {
-        try {
-          const pcmChunk = await convertBlobToPcm16(
-            event.data,
-            audioContextRef.current!,
-          );
+      const resampled = downsampleBuffer(
+        event.data.samples,
+        event.data.sampleRate ?? audioContext.sampleRate,
+        TARGET_SAMPLE_RATE,
+      );
+      const pcmChunk = floatToPcm16(resampled);
+
+      pendingChunkSendsRef.current = pendingChunkSendsRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (pcmChunk.byteLength === 0) {
+            return;
+          }
 
           setChunks((currentChunks) => [...currentChunks, pcmChunk]);
           await chunkHandlerRef.current?.(pcmChunk);
-        } catch (processingError) {
+        })
+        .catch((processingError) => {
           const message =
             processingError instanceof Error
               ? processingError.message
               : "Unable to process microphone audio.";
           setError(message);
-        }
-      })();
+        })
+        .finally(() => {
+          if (event.data.type === "flushed") {
+            flushResolverRef.current?.();
+            flushResolverRef.current = null;
+          }
+        });
+
+      void pendingChunkSendsRef.current;
     };
 
-    recorder.onerror = () => {
-      setError("Microphone recording failed.");
-      stop();
-    };
-
-    recorder.onstop = () => {
-      if (streamRef.current) {
-        for (const track of streamRef.current.getTracks()) {
-          track.stop();
-        }
-        streamRef.current = null;
-      }
-
-      recorderRef.current = null;
-      setIsRecording(false);
-    };
-
-    recorder.start(options.timeSliceMs ?? 400);
+    sourceNode.connect(workletNode);
   }, [stop]);
 
   useEffect(() => {
     return () => {
-      stop();
-
-      if (audioContextRef.current) {
-        void audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
+      void stop().finally(() => {
+        if (audioContextRef.current) {
+          void audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+      });
     };
   }, [stop]);
 

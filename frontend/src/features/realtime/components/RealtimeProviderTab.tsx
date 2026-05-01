@@ -38,7 +38,7 @@ export function RealtimeProviderTab({
 
   useEffect(() => {
     if (!session.isConnected && isRecording) {
-      stopMicrophone();
+      void stopMicrophone();
     }
   }, [isRecording, session.isConnected, stopMicrophone]);
 
@@ -69,7 +69,7 @@ export function RealtimeProviderTab({
   }
 
   async function handleStop() {
-    stopMicrophone();
+    await stopMicrophone();
     await session.disconnect();
   }
 
