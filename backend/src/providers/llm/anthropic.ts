@@ -55,11 +55,8 @@ export class AnthropicLLMProvider implements ILLMProvider {
 
   async validateCredentials(): Promise<boolean> {
     try {
-      await this.client.messages.create({
-        model: 'claude-haiku-3-5-20241022',
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'hi' }],
-      });
+      const iterator = this.client.models.list({ limit: 1 })[Symbol.asyncIterator]();
+      await iterator.next();
       return true;
     } catch {
       return false;
