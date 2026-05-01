@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 // Mock the Anthropic SDK -- vi.mock is hoisted before imports
 const mockCreate = vi.fn();
+const mockModelsList = vi.fn();
 vi.mock('@anthropic-ai/sdk', () => ({
   default: vi.fn(),
 }));
@@ -12,8 +13,9 @@ describe('AnthropicLLMProvider', () => {
 
   beforeEach(() => {
     mockCreate.mockReset();
+    mockModelsList.mockReset();
     vi.mocked(Anthropic).mockImplementation(
-      () => ({ messages: { create: mockCreate } }) as unknown as Anthropic,
+      () => ({ messages: { create: mockCreate }, models: { list: mockModelsList } }) as unknown as Anthropic,
     );
     provider = new AnthropicLLMProvider('test-api-key');
   });
@@ -214,18 +216,30 @@ describe('AnthropicLLMProvider', () => {
   });
 
   describe('validateCredentials', () => {
-    it('returns true when API call succeeds', async () => {
-      mockCreate.mockResolvedValue({
-        content: [{ type: 'text', text: 'hi' }],
-      });
+    function mockModelIterator(result: unknown): AsyncIterable<unknown> {
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield result;
+        },
+      };
+    }
+
+    it('returns true when model listing succeeds', async () => {
+      mockModelsList.mockReturnValue(mockModelIterator({
+        id: 'claude-3-5-haiku-20241022',
+      }));
 
       const result = await provider.validateCredentials();
 
       expect(result).toBe(true);
+      expect(mockModelsList).toHaveBeenCalledWith({ limit: 1 });
+      expect(mockCreate).not.toHaveBeenCalled();
     });
 
-    it('returns false when API call throws', async () => {
-      mockCreate.mockRejectedValue(new Error('authentication_error'));
+    it('returns false when model listing throws', async () => {
+      mockModelsList.mockImplementation(() => {
+        throw new Error('authentication_error');
+      });
 
       const result = await provider.validateCredentials();
 
