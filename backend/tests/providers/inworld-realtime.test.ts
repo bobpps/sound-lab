@@ -151,6 +151,7 @@ describe('InworldRealtimeProvider', () => {
     const onEvent = vi.fn<(event: RealtimeEvent) => void>();
     const sessionPromise = provider.createSession(
       {
+        language: 'en-US',
         model: 'openai/gpt-4.1-nano',
         systemPrompt: 'Be concise',
         voice: 'Olivia',
@@ -195,6 +196,9 @@ describe('InworldRealtimeProvider', () => {
         output_modalities: ['audio'],
         audio: {
           input: {
+            transcription: {
+              language: 'en-US',
+            },
             turn_detection: {
               type: 'semantic_vad',
               eagerness: 'medium',

@@ -63,8 +63,18 @@ export class OpenAITTSProvider implements ITTSProvider {
 
   constructor(private readonly apiKey: string) {}
 
-  async getVoices(): Promise<IVoice[]> {
-    return buildStaticVoices();
+  async getModels(): Promise<string[]> {
+    return [...ALL_MODELS];
+  }
+
+  async getVoices(model?: string): Promise<IVoice[]> {
+    const voices = buildStaticVoices();
+    if (!model) return voices;
+
+    return voices.filter((voice) => {
+      const supportedModels = voice.providerMeta?.supportedModels;
+      return Array.isArray(supportedModels) && supportedModels.includes(model);
+    });
   }
 
   async synthesize(opts: ISynthesizeOptions): Promise<Buffer> {

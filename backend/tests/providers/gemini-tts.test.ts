@@ -47,9 +47,18 @@ describe('GeminiTTSProvider', () => {
         description: undefined,
         previewUrl: undefined,
         providerMeta: {
-          models: ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'],
+          supportedModels: [
+            'gemini-3.1-flash-tts-preview',
+            'gemini-2.5-flash-preview-tts',
+            'gemini-2.5-pro-preview-tts',
+          ],
         },
       });
+    });
+
+    it('filters voices by model', async () => {
+      const voices = await provider.getVoices('gemini-2.5-pro-preview-tts');
+      expect(voices).toHaveLength(30);
     });
 
     it('includes all 30 voice names', async () => {
@@ -67,15 +76,25 @@ describe('GeminiTTSProvider', () => {
     });
   });
 
+  describe('getModels', () => {
+    it('returns supported models', async () => {
+      await expect(provider.getModels()).resolves.toEqual([
+        'gemini-3.1-flash-tts-preview',
+        'gemini-2.5-flash-preview-tts',
+        'gemini-2.5-pro-preview-tts',
+      ]);
+    });
+  });
+
   describe('validateCredentials', () => {
     it('returns true when API returns 200', async () => {
-      mockFetch.mockResolvedValue(new Response(JSON.stringify({ name: 'models/gemini-2.5-flash-preview-tts' }), { status: 200 }));
+      mockFetch.mockResolvedValue(new Response(JSON.stringify({ name: 'models/gemini-3.1-flash-tts-preview' }), { status: 200 }));
 
       const result = await provider.validateCredentials();
 
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview',
         { headers: { 'x-goog-api-key': 'test-api-key' } },
       );
     });
@@ -123,7 +142,7 @@ describe('GeminiTTSProvider', () => {
       await provider.synthesize({ voiceId: 'Kore', text: 'Hello' });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent',
         expect.objectContaining({
           method: 'POST',
           headers: {

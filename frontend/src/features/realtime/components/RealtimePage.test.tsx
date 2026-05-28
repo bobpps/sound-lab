@@ -46,6 +46,35 @@ const modelsByProvider: Record<string, string[]> = {
   "inworld-realtime": ["inworld-voice-runtime"],
 };
 
+const voicesByProviderAndModel: Record<string, Record<string, Array<{
+  id: string;
+  name: string;
+  language: string;
+  gender?: string;
+}>>> = {
+  "openai-realtime": {
+    "gpt-realtime-mini": [
+      { id: "marin", name: "Marin", language: "multi", gender: "female" },
+      { id: "cedar", name: "Cedar", language: "multi", gender: "male" },
+    ],
+  },
+  "gemini-realtime": {
+    "gemini-2.5-flash-preview-native-audio-dialog": [
+      { id: "Kore", name: "Kore", language: "multi" },
+    ],
+  },
+  "elevenlabs-realtime": {
+    "elevenlabs-conversational-v1": [
+      { id: "voice-1", name: "Rachel", language: "en", gender: "female" },
+    ],
+  },
+  "inworld-realtime": {
+    "inworld-voice-runtime": [
+      { id: "Dennis", name: "Dennis", language: "en", gender: "male" },
+    ],
+  },
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -85,6 +114,13 @@ describe("RealtimePage", () => {
       for (const [providerId, models] of Object.entries(modelsByProvider)) {
         if (method === "GET" && url.endsWith(`/realtime/${providerId}/models`)) {
           return jsonResponse(models);
+        }
+      }
+
+      for (const [providerId, voicesByModel] of Object.entries(voicesByProviderAndModel)) {
+        if (method === "GET" && url.includes(`/realtime/${providerId}/voices`)) {
+          const requestUrl = new URL(url, "http://localhost");
+          return jsonResponse(voicesByModel[requestUrl.searchParams.get("model") ?? ""] ?? []);
         }
       }
 
@@ -166,6 +202,11 @@ describe("RealtimePage", () => {
     expect(
       screen.getByDisplayValue("gpt-realtime-mini"),
     ).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Marin · female")).toBeInTheDocument();
+    expect(screen.getByText("Marin · female")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("English (US)")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Dialog Language"), "__custom__");
+    expect(screen.getByPlaceholderText("e.g. nl-NL")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Gemini" }));
 
@@ -173,6 +214,8 @@ describe("RealtimePage", () => {
     expect(
       screen.getByDisplayValue("gemini-2.5-flash-preview-native-audio-dialog"),
     ).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Kore")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Auto / provider default")).toBeDisabled();
   });
 
   it("creates a new agent prompt inline for the active provider", async () => {

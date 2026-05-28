@@ -10,6 +10,7 @@ interface TestRealtimeProvider {
   id: string;
   name: string;
   getModels: ReturnType<typeof vi.fn>;
+  getVoices: ReturnType<typeof vi.fn>;
   createSession: ReturnType<typeof vi.fn>;
 }
 
@@ -33,12 +34,14 @@ function waitForSocketMessage(socket: TestWebSocketClient): Promise<RealtimeEven
 describe('Realtime routes', () => {
   let app: FastifyInstance;
   let mockGetModels: ReturnType<typeof vi.fn>;
+  let mockGetVoices: ReturnType<typeof vi.fn>;
   let mockCreateSession: ReturnType<typeof vi.fn>;
   let mockSendAudio: ReturnType<typeof vi.fn>;
   let mockCloseSession: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     mockGetModels = vi.fn<() => Promise<string[]>>();
+    mockGetVoices = vi.fn();
     mockCreateSession = vi.fn<
       (
         config: RealtimeSessionConfig,
@@ -55,6 +58,7 @@ describe('Realtime routes', () => {
         id: 'openai-realtime',
         name: 'OpenAI Realtime',
         getModels: mockGetModels,
+        getVoices: mockGetVoices,
         createSession: mockCreateSession,
       }),
     );
@@ -141,6 +145,36 @@ describe('Realtime routes', () => {
     });
   });
 
+  describe('GET /realtime/:providerId/voices', () => {
+    it('returns voices for the selected realtime model', async () => {
+      await seedRealtimeProvider();
+      mockGetVoices.mockResolvedValueOnce([
+        {
+          id: 'marin',
+          name: 'Marin',
+          language: 'multi',
+          gender: 'female',
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/realtime/openai-realtime/voices?model=gpt-realtime',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual([
+        {
+          id: 'marin',
+          name: 'Marin',
+          language: 'multi',
+          gender: 'female',
+        },
+      ]);
+      expect(mockGetVoices).toHaveBeenCalledWith('gpt-realtime');
+    });
+  });
+
   describe('GET /realtime/:providerId/session websocket', () => {
     it('creates a provider session when session_start is received', async () => {
       await seedRealtimeProvider();
@@ -157,6 +191,7 @@ describe('Realtime routes', () => {
         data: {
           model: 'gpt-realtime',
           systemPrompt: 'You are helpful',
+          language: 'en-US',
           voice: 'alloy',
         },
       }));
@@ -168,6 +203,7 @@ describe('Realtime routes', () => {
         data: {
           model: 'gpt-realtime',
           systemPrompt: 'You are helpful',
+          language: 'en-US',
           voice: 'alloy',
         },
       });
@@ -175,6 +211,7 @@ describe('Realtime routes', () => {
         {
           model: 'gpt-realtime',
           systemPrompt: 'You are helpful',
+          language: 'en-US',
           voice: 'alloy',
         },
         expect.any(Function),

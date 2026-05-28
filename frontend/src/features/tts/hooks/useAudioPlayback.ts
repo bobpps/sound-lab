@@ -10,6 +10,7 @@ export type VoiceMap = Partial<Record<1 | 2, string>>;
 
 export type SynthesizeFn = (
   providerId: string,
+  model: string,
   voiceId: string,
   text: string,
   signal: AbortSignal,
@@ -19,6 +20,7 @@ export type PlaybackStatus = "idle" | "playing" | "error";
 
 interface UseAudioPlaybackOptions {
   providerId: string | null;
+  model: string | null;
   messages: PlaybackMessage[];
   voiceMap: VoiceMap;
   synthesize: SynthesizeFn;
@@ -35,6 +37,7 @@ interface UseAudioPlaybackReturn {
 
 export function useAudioPlayback({
   providerId,
+  model,
   messages,
   voiceMap,
   synthesize,
@@ -49,12 +52,14 @@ export function useAudioPlayback({
 
   // Keep refs in sync so the playback chain always reads current values
   const providerIdRef = useRef(providerId);
+  const modelRef = useRef(model);
   const messagesRef = useRef(messages);
   const voiceMapRef = useRef(voiceMap);
   const synthesizeRef = useRef(synthesize);
 
   useEffect(() => {
     providerIdRef.current = providerId;
+    modelRef.current = model;
     messagesRef.current = messages;
     voiceMapRef.current = voiceMap;
     synthesizeRef.current = synthesize;
@@ -64,6 +69,7 @@ export function useAudioPlayback({
   const characters = new Set(messages.map((m) => m.character));
   const canPlay =
     providerId !== null &&
+    model !== null &&
     messages.length > 0 &&
     [...characters].every((c) => voiceMap[c] !== undefined);
 
@@ -90,6 +96,7 @@ export function useAudioPlayback({
     const currentMessages = messagesRef.current;
     const currentVoiceMap = voiceMapRef.current;
     const currentProviderId = providerIdRef.current;
+    const currentModel = modelRef.current;
     const currentSynthesize = synthesizeRef.current;
 
     if (index >= currentMessages.length) {
@@ -102,7 +109,7 @@ export function useAudioPlayback({
     const message = currentMessages[index];
     const voiceId = currentVoiceMap[message.character];
 
-    if (!voiceId || !currentProviderId) {
+    if (!voiceId || !currentProviderId || !currentModel) {
       cleanup();
       setStatus("error");
       setError("Missing voice assignment");
@@ -117,6 +124,7 @@ export function useAudioPlayback({
 
       const blob = await currentSynthesize(
         currentProviderId,
+        currentModel,
         voiceId,
         message.text,
         controller.signal,

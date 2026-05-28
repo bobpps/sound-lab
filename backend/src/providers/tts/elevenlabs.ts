@@ -1,6 +1,8 @@
 import type { ITTSProvider, IVoice, ISynthesizeOptions } from './types.js';
 
 const BASE_URL = 'https://api.elevenlabs.io';
+const DEFAULT_MODEL = 'eleven_multilingual_v2';
+const MODELS = [DEFAULT_MODEL] as const;
 
 interface ElevenLabsVoice {
   voice_id: string;
@@ -34,6 +36,7 @@ function mapVoice(v: ElevenLabsVoice): IVoice {
       category: v.category,
       labels: v.labels,
       settings: v.settings,
+      supportedModels: [...MODELS],
     },
   };
 }
@@ -68,6 +71,10 @@ export class ElevenLabsTTSProvider implements ITTSProvider {
 
   constructor(private readonly apiKey: string) {}
 
+  async getModels(): Promise<string[]> {
+    return [...MODELS];
+  }
+
   async getVoices(): Promise<IVoice[]> {
     const response = await fetch(`${BASE_URL}/v1/voices`, {
       headers: { 'xi-api-key': this.apiKey },
@@ -99,7 +106,7 @@ export class ElevenLabsTTSProvider implements ITTSProvider {
       },
       body: JSON.stringify({
         text: opts.text,
-        model_id: 'eleven_multilingual_v2',
+        model_id: opts.model ?? DEFAULT_MODEL,
         voice_settings: {
           stability,
           similarity_boost: 0.75,

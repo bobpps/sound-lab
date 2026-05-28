@@ -98,6 +98,7 @@ describe('ElevenLabsTTSProvider', () => {
           category: 'professional',
           labels: { gender: 'female', accent: 'American', age: 'young' },
           settings: { stability: 0.5, similarity_boost: 0.75 },
+          supportedModels: ['eleven_multilingual_v2'],
         },
       });
     });
@@ -120,6 +121,7 @@ describe('ElevenLabsTTSProvider', () => {
           category: 'premade',
           labels: { gender: 'male' },
           settings: undefined,
+          supportedModels: ['eleven_multilingual_v2'],
         },
       });
     });
@@ -155,6 +157,12 @@ describe('ElevenLabsTTSProvider', () => {
       await expect(provider.getVoices()).rejects.toThrow(
         'ElevenLabs API error: 500 Server Error',
       );
+    });
+  });
+
+  describe('getModels', () => {
+    it('returns supported models', async () => {
+      await expect(provider.getModels()).resolves.toEqual(['eleven_multilingual_v2']);
     });
   });
 
@@ -205,6 +213,19 @@ describe('ElevenLabsTTSProvider', () => {
           speed: 1.0,
         },
       });
+    });
+
+    it('uses selected model when provided', async () => {
+      mockFetch.mockResolvedValue(new Response(fakeAudio, { status: 200 }));
+
+      await provider.synthesize({
+        voiceId: 'voice-1',
+        text: 'Hello',
+        model: 'eleven_multilingual_v2',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody.model_id).toBe('eleven_multilingual_v2');
     });
 
     it('uses custom format when provided', async () => {

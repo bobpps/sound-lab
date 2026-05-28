@@ -23,6 +23,10 @@ class TestRealtimeProvider implements IRealtimeProvider {
     return [this.apiKey];
   }
 
+  async getVoices(): Promise<[]> {
+    return [];
+  }
+
   async createSession(
     config: RealtimeSessionConfig,
     onEvent: (event: RealtimeEvent) => void,

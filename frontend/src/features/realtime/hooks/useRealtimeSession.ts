@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface RealtimeConnectConfig {
+  language?: string;
   model: string;
   systemPrompt: string;
   voice?: string;

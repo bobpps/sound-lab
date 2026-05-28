@@ -270,6 +270,7 @@ describe('Provider routes', () => {
       (app as Record<string, unknown>).createTTSProvider = vi.fn(() => ({
         id: 'elevenlabs',
         name: 'ElevenLabs',
+        getModels: vi.fn(),
         getVoices: vi.fn(),
         synthesize: vi.fn(),
         validateCredentials,
@@ -295,6 +296,7 @@ describe('Provider routes', () => {
       (app as Record<string, unknown>).createTTSProvider = vi.fn(() => ({
         id: 'elevenlabs',
         name: 'ElevenLabs',
+        getModels: vi.fn(),
         getVoices: vi.fn(),
         synthesize: vi.fn(),
         validateCredentials: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),

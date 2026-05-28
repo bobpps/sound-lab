@@ -1,8 +1,10 @@
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { WebSocket } from 'ws';
+import { Type } from '@sinclair/typebox';
 import type { IRealtimeSession, RealtimeEvent, RealtimeSessionConfig } from '../../providers/realtime/types.js';
 import { RealtimeModelsResponse, RealtimeProviderIdParam } from '../../schemas/realtime.js';
 import { ErrorResponse } from '../../schemas/common.js';
+import { Voice } from '../../schemas/tts.js';
 
 interface RealtimeAccess {
   providerId: string;
@@ -51,9 +53,14 @@ function extractSessionConfig(message: Record<string, unknown>): RealtimeSession
   const source = isRecord(message.data) ? message.data : message;
   const model = source.model;
   const systemPrompt = source.systemPrompt;
+  const language = source.language;
   const voice = source.voice;
 
   if (typeof model !== 'string' || typeof systemPrompt !== 'string') {
+    return null;
+  }
+
+  if (language !== undefined && typeof language !== 'string') {
     return null;
   }
 
@@ -61,7 +68,12 @@ function extractSessionConfig(message: Record<string, unknown>): RealtimeSession
     return null;
   }
 
-  return { model, systemPrompt, voice };
+  return {
+    ...(language ? { language } : {}),
+    model,
+    systemPrompt,
+    ...(voice ? { voice } : {}),
+  };
 }
 
 function extractAudioChunk(message: Record<string, unknown>): Buffer | null {
@@ -109,6 +121,32 @@ const realtimeRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const provider = fastify.createRealtimeProvider(access.providerId, access.apiKey);
       return provider.getModels();
+    } catch {
+      reply.badRequest(`Provider ${access.providerId} is not supported`);
+    }
+  });
+
+  fastify.get('/:providerId/voices', {
+    schema: {
+      params: RealtimeProviderIdParam,
+      querystring: Type.Object({
+        model: Type.Optional(Type.String()),
+      }, { additionalProperties: false }),
+      response: {
+        200: Type.Array(Voice),
+        400: ErrorResponse,
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const { providerId } = request.params as { providerId: string };
+    const { model } = request.query as { model?: string };
+    const access = await resolveRealtimeAccess(providerId, reply);
+    if (!access) return;
+
+    try {
+      const provider = fastify.createRealtimeProvider(access.providerId, access.apiKey);
+      return provider.getVoices(model);
     } catch {
       reply.badRequest(`Provider ${access.providerId} is not supported`);
     }

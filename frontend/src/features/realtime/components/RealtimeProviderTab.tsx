@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   useCreateAgentPrompt,
   useAgentPrompts,
   useRealtimeModels,
+  useRealtimeVoices,
 } from "../api/queries.ts";
 import { useMicrophone } from "../hooks/useMicrophone.ts";
 import { useRealtimeSession } from "../hooks/useRealtimeSession.ts";
@@ -13,6 +14,7 @@ import {
 import { TranscriptionPanel } from "./TranscriptionPanel.tsx";
 
 interface RealtimeProviderTabProps {
+  languageMode?: "auto-only" | "configurable";
   providerId: string;
   providerLabel: string;
 }
@@ -22,12 +24,18 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function RealtimeProviderTab({
+  languageMode = "configurable",
   providerId,
   providerLabel,
 }: RealtimeProviderTabProps) {
+  const [selectedModel, setSelectedModel] = useState("");
   const promptsQuery = useAgentPrompts(providerId);
   const createPrompt = useCreateAgentPrompt();
   const modelsQuery = useRealtimeModels(providerId);
+  const models = modelsQuery.data ?? [];
+  const resolvedModel =
+    models.find((model) => model === selectedModel) ?? models[0] ?? "";
+  const voicesQuery = useRealtimeVoices(providerId, resolvedModel || null);
   const {
     error: microphoneError,
     isRecording,
@@ -52,6 +60,7 @@ export function RealtimeProviderTab({
   }
 
   async function handleStart(config: {
+    language?: string;
     model: string;
     systemPrompt: string;
     voice?: string;
@@ -82,7 +91,8 @@ export function RealtimeProviderTab({
         isCreatingPrompt={createPrompt.isPending}
         isModelsLoading={modelsQuery.isPending}
         isPromptsLoading={promptsQuery.isPending}
-        models={modelsQuery.data ?? []}
+        isVoicesLoading={voicesQuery.isPending}
+        models={models}
         modelsError={
           modelsQuery.isError
             ? getErrorMessage(modelsQuery.error, "Unable to load realtime models.")
@@ -95,6 +105,15 @@ export function RealtimeProviderTab({
             : null
         }
         providerLabel={providerLabel}
+        languageMode={languageMode}
+        selectedModel={selectedModel}
+        voices={voicesQuery.data ?? []}
+        voicesError={
+          voicesQuery.isError
+            ? getErrorMessage(voicesQuery.error, "Unable to load realtime voices.")
+            : null
+        }
+        onModelChange={setSelectedModel}
         onCreatePrompt={handleCreatePrompt}
         onStart={handleStart}
         onStop={handleStop}

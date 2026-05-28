@@ -1,8 +1,12 @@
 import type { ITTSProvider, IVoice, ISynthesizeOptions } from './types.js';
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const DEFAULT_MODEL = 'gemini-2.5-flash-preview-tts';
-const MODELS = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'] as const;
+const DEFAULT_MODEL = 'gemini-3.1-flash-tts-preview';
+const MODELS = [
+  DEFAULT_MODEL,
+  'gemini-2.5-flash-preview-tts',
+  'gemini-2.5-pro-preview-tts',
+] as const;
 
 const VOICE_NAMES = [
   'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir',
@@ -21,7 +25,7 @@ function buildStaticVoices(): IVoice[] {
     gender: undefined,
     description: undefined,
     previewUrl: undefined,
-    providerMeta: { models: [...MODELS] },
+    providerMeta: { supportedModels: [...MODELS] },
   }));
 }
 
@@ -55,8 +59,18 @@ export class GeminiTTSProvider implements ITTSProvider {
 
   constructor(private readonly apiKey: string) {}
 
-  async getVoices(): Promise<IVoice[]> {
-    return buildStaticVoices();
+  async getModels(): Promise<string[]> {
+    return [...MODELS];
+  }
+
+  async getVoices(model?: string): Promise<IVoice[]> {
+    const voices = buildStaticVoices();
+    if (!model) return voices;
+
+    return voices.filter((voice) => {
+      const supportedModels = voice.providerMeta?.supportedModels;
+      return Array.isArray(supportedModels) && supportedModels.includes(model);
+    });
   }
 
   async synthesize(opts: ISynthesizeOptions): Promise<Buffer> {

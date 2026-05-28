@@ -141,12 +141,28 @@ describe('OpenAIRealtimeProvider', () => {
     ]);
   });
 
+  it('returns OpenAI realtime voices', async () => {
+    await expect(provider.getVoices('gpt-realtime')).resolves.toEqual([
+      { id: 'alloy', name: 'Alloy', language: 'multi', providerMeta: { type: 'builtin' } },
+      { id: 'ash', name: 'Ash', language: 'multi', providerMeta: { type: 'builtin' } },
+      { id: 'ballad', name: 'Ballad', language: 'multi', providerMeta: { type: 'builtin' } },
+      { id: 'coral', name: 'Coral', language: 'multi', providerMeta: { type: 'builtin' } },
+      { id: 'echo', name: 'Echo', language: 'multi', providerMeta: { type: 'builtin' } },
+      { id: 'sage', name: 'Sage', language: 'multi', providerMeta: { type: 'builtin' } },
+      { id: 'shimmer', name: 'Shimmer', language: 'multi', providerMeta: { type: 'builtin' } },
+      { id: 'verse', name: 'Verse', language: 'multi', providerMeta: { type: 'builtin' } },
+      { id: 'marin', name: 'Marin', language: 'multi', providerMeta: { type: 'builtin' } },
+      { id: 'cedar', name: 'Cedar', language: 'multi', providerMeta: { type: 'builtin' } },
+    ]);
+  });
+
   it('opens an upstream realtime socket and sends session.update before resolving', async () => {
     modelsList.list.mockReturnValue((async function* empty() {})());
 
     const onEvent = vi.fn<(event: RealtimeEvent) => void>();
     const sessionPromise = provider.createSession(
       {
+        language: 'en-US',
         model: 'gpt-realtime',
         systemPrompt: 'Be concise',
         voice: 'marin',
@@ -177,13 +193,14 @@ describe('OpenAIRealtimeProvider', () => {
           input: {
             format: {
               type: 'audio/pcm',
-              rate: 24000,
+              rate: 16000,
             },
             noise_reduction: {
               type: 'near_field',
             },
             transcription: {
               model: 'gpt-4o-mini-transcribe',
+              language: 'en-US',
             },
             turn_detection: {
               type: 'server_vad',
@@ -290,6 +307,7 @@ describe('OpenAIRealtimeProvider', () => {
           type: 'audio',
           data: {
             chunk: 'YmFzZTY0LWF1ZGlv',
+            mimeType: 'audio/pcm;rate=24000',
             itemId: 'item-assistant-1',
             responseId: 'resp-1',
             contentIndex: 0,

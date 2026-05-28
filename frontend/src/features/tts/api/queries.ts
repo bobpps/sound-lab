@@ -13,7 +13,9 @@ import type {
 
 export const ttsKeys = {
   providers: () => ["tts", "providers"] as const,
-  voices: (providerId: string) => ["tts", "voices", providerId] as const,
+  models: (providerId: string) => ["tts", "models", providerId] as const,
+  voices: (providerId: string, model: string) =>
+    ["tts", "voices", providerId, model] as const,
   dialogs: () => ["tts", "dialogs"] as const,
   annotations: (dialogId: number) => ["tts", "annotations", dialogId] as const,
   annotation: (annotationId: number) =>
@@ -33,11 +35,22 @@ export function useTtsProviders() {
   });
 }
 
-export function useTtsVoices(providerId: string | null) {
+export function useTtsModels(providerId: string | null) {
   return useQuery({
-    queryKey: ttsKeys.voices(providerId ?? ""),
-    queryFn: () => api.get<Voice[]>(`/tts/${providerId}/voices`),
+    queryKey: ttsKeys.models(providerId ?? ""),
+    queryFn: () => api.get<string[]>(`/tts/${providerId}/models`),
     enabled: providerId !== null,
+  });
+}
+
+export function useTtsVoices(providerId: string | null, model: string | null) {
+  return useQuery({
+    queryKey: ttsKeys.voices(providerId ?? "", model ?? ""),
+    queryFn: () =>
+      api.get<Voice[]>(
+        `/tts/${providerId}/voices?model=${encodeURIComponent(model ?? "")}`,
+      ),
+    enabled: providerId !== null && model !== null,
   });
 }
 

@@ -11,12 +11,14 @@ import {
 import { AnnotationEditor } from "./AnnotationEditor.tsx";
 import { AnnotationSelector } from "./AnnotationSelector.tsx";
 import { DialogSelector } from "./DialogSelector.tsx";
+import { ModelSelector } from "./ModelSelector.tsx";
 import { PlaybackControls } from "./PlaybackControls.tsx";
 import { ProviderSelector } from "./ProviderSelector.tsx";
 import { VoiceAssignment } from "./VoiceAssignment.tsx";
 
 async function synthesize(
   providerId: string,
+  model: string,
   voiceId: string,
   text: string,
   signal: AbortSignal,
@@ -24,7 +26,7 @@ async function synthesize(
   const response = await api.fetchRaw(`/tts/${providerId}/synthesize`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ voiceId, text }),
+    body: JSON.stringify({ voiceId, text, model }),
     signal,
   });
 
@@ -75,10 +77,11 @@ export function TtsPage() {
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<
     number | null
   >(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [voiceMap, setVoiceMap] = useState<VoiceMap>({});
 
   // Queries for voice assignment + playback
-  const voicesQuery = useTtsVoices(selectedProviderId);
+  const voicesQuery = useTtsVoices(selectedProviderId, selectedModel);
   const annotationQuery = useAnnotation(selectedAnnotationId);
   const dialogDetailQuery = useDialogDetail(selectedDialogId);
 
@@ -97,6 +100,7 @@ export function TtsPage() {
 
   const playback = useAudioPlayback({
     providerId: selectedProviderId,
+    model: selectedModel,
     messages: playbackMessages,
     voiceMap,
     synthesize,
@@ -106,6 +110,7 @@ export function TtsPage() {
     setSelectedProviderId(providerId);
     setSelectedDialogId(null);
     setSelectedAnnotationId(null);
+    setSelectedModel(null);
     setVoiceMap({});
     playback.stop();
   }
@@ -113,11 +118,18 @@ export function TtsPage() {
   function handleDialogSelect(dialogId: number) {
     setSelectedDialogId(dialogId);
     setSelectedAnnotationId(null);
+    setSelectedModel(null);
     playback.stop();
   }
 
   function handleAnnotationSelect(annotationId: number | null) {
     setSelectedAnnotationId(annotationId);
+    playback.stop();
+  }
+
+  function handleModelSelect(model: string) {
+    setSelectedModel(model);
+    setVoiceMap({});
     playback.stop();
   }
 
@@ -132,7 +144,7 @@ export function TtsPage() {
 
       {/* Selectors — from PR #59 components */}
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-4">
           <ProviderSelector
             selectedId={selectedProviderId}
             onSelect={handleProviderSelect}
@@ -142,6 +154,14 @@ export function TtsPage() {
             <DialogSelector
               selectedId={selectedDialogId}
               onSelect={handleDialogSelect}
+            />
+          )}
+
+          {selectedProviderId !== null && selectedDialogId !== null && (
+            <ModelSelector
+              providerId={selectedProviderId}
+              selectedModel={selectedModel}
+              onSelect={handleModelSelect}
             />
           )}
 
@@ -171,7 +191,7 @@ export function TtsPage() {
         )}
 
       {/* Voice Assignment — shown after provider + dialog selected */}
-      {selectedProviderId && selectedDialogId !== null && (
+      {selectedProviderId && selectedDialogId !== null && selectedModel && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900">
             Voice Assignment

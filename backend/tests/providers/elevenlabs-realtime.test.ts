@@ -159,6 +159,7 @@ describe('ElevenLabsRealtimeProvider', () => {
     const events: RealtimeEvent[] = [];
     const sessionPromise = provider.createSession(
       {
+        language: 'en-US',
         model: 'agent-123',
         systemPrompt: 'Be concise.',
         voice: 'voice-456',
@@ -184,6 +185,7 @@ describe('ElevenLabsRealtimeProvider', () => {
       type: 'conversation_initiation_client_data',
       conversation_config_override: {
         agent: {
+          language: 'en',
           prompt: {
             prompt: 'Be concise.',
           },

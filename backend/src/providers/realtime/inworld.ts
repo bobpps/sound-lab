@@ -6,14 +6,26 @@ import type {
   RealtimeEvent,
   RealtimeSessionConfig,
 } from './types.js';
+import type { IVoice } from '../tts/types.js';
 
 const INWORLD_BASE_URL = 'https://api.inworld.ai';
 const INWORLD_MODELS_URL = `${INWORLD_BASE_URL}/llm/v1alpha/models`;
+const INWORLD_VOICES_URL = `${INWORLD_BASE_URL}/voices/v1/voices`;
 const INWORLD_REALTIME_URL = 'wss://api.inworld.ai/api/v1/realtime/session';
 const DEFAULT_REALTIME_MODEL = 'google-ai-studio/gemini-2.5-flash';
 const DEFAULT_VOICE = 'Dennis';
 const DEFAULT_TTS_MODEL = 'inworld-tts-1.5-mini';
 const STARTUP_TIMEOUT_MS = 10_000;
+
+interface InworldVoice {
+  voiceId?: string;
+  displayName?: string;
+  langCode?: string;
+  description?: string | null;
+  tags?: string[];
+  source?: string;
+  name?: string;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -165,7 +177,31 @@ function createSessionKey(): string {
   return `voice-${Date.now()}-${randomUUID()}`;
 }
 
+function mapVoice(voice: InworldVoice): IVoice | null {
+  if (!voice.voiceId || !voice.displayName) {
+    return null;
+  }
+
+  const language = voice.langCode?.split('_')[0]?.toLowerCase() || 'en';
+  const gender = voice.tags?.find((tag) => tag === 'male' || tag === 'female');
+
+  return {
+    id: voice.voiceId,
+    name: voice.displayName,
+    language,
+    gender,
+    description: voice.description ?? undefined,
+    providerMeta: {
+      langCode: voice.langCode,
+      name: voice.name,
+      source: voice.source,
+      tags: voice.tags,
+    },
+  };
+}
+
 function buildSessionUpdate(config: RealtimeSessionConfig): Record<string, unknown> {
+  const language = config.language?.trim();
   return {
     type: 'session.update',
     session: {
@@ -175,6 +211,7 @@ function buildSessionUpdate(config: RealtimeSessionConfig): Record<string, unkno
       output_modalities: ['audio'],
       audio: {
         input: {
+          ...(language ? { transcription: { language } } : {}),
           turn_detection: {
             type: 'semantic_vad',
             eagerness: 'medium',
@@ -279,6 +316,32 @@ export class InworldRealtimeProvider implements IRealtimeProvider {
     }
 
     return models.size > 0 ? [...models].sort() : [DEFAULT_REALTIME_MODEL];
+  }
+
+  async getVoices(): Promise<IVoice[]> {
+    const response = await fetch(INWORLD_VOICES_URL, {
+      headers: {
+        Authorization: `Basic ${this.apiKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      const message = await readErrorResponse(
+        response,
+        `Inworld voices API error (${response.status})`,
+      );
+      throw new Error(`Inworld voices API error: ${message}`);
+    }
+
+    const body = await response.json();
+    if (!isRecord(body) || !Array.isArray(body.voices)) {
+      return [];
+    }
+
+    return body.voices
+      .filter(isRecord)
+      .map((voice) => mapVoice(voice))
+      .filter((voice): voice is IVoice => voice !== null);
   }
 
   async createSession(

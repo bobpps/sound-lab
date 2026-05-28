@@ -7,6 +7,7 @@ import {
 import {
   ttsKeys,
   useTtsProviders,
+  useTtsModels,
   useTtsVoices,
   useDialogs,
   useAnnotationsByDialog,
@@ -46,6 +47,8 @@ const voices = [
     gender: "female",
   },
 ];
+
+const ttsModels = ["eleven_multilingual_v2"];
 
 const dialogs = [
   {
@@ -140,6 +143,14 @@ describe("tts queries", () => {
 
         if (url.endsWith("/api/tts/elevenlabs/voices")) {
           return jsonResponse(voices);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/voices?model=eleven_multilingual_v2")) {
+          return jsonResponse(voices);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/models")) {
+          return jsonResponse(ttsModels);
         }
 
         if (url.endsWith("/api/dialogs") && method === "GET") {
@@ -244,9 +255,12 @@ describe("tts queries", () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
-    const { result } = renderHook(() => useTtsVoices("elevenlabs"), {
-      wrapper,
-    });
+    const { result } = renderHook(
+      () => useTtsVoices("elevenlabs", "eleven_multilingual_v2"),
+      {
+        wrapper,
+      },
+    );
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);
@@ -254,7 +268,26 @@ describe("tts queries", () => {
 
     expect(result.current.data).toEqual(voices);
     expect(fetch).toHaveBeenCalledWith(
-      "/api/tts/elevenlabs/voices",
+      "/api/tts/elevenlabs/voices?model=eleven_multilingual_v2",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("fetches TTS models for a provider", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useTtsModels("elevenlabs"), {
+      wrapper,
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(ttsModels);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/tts/elevenlabs/models",
       expect.objectContaining({ method: "GET" }),
     );
   });
@@ -263,7 +296,18 @@ describe("tts queries", () => {
     const queryClient = createTestQueryClient();
     const wrapper = createTestWrapper({ queryClient });
 
-    const { result } = renderHook(() => useTtsVoices(null), { wrapper });
+    const { result } = renderHook(() => useTtsVoices(null, "model"), { wrapper });
+
+    expect(result.current.fetchStatus).toBe("idle");
+  });
+
+  it("disables voices query when model is null", () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createTestWrapper({ queryClient });
+
+    const { result } = renderHook(() => useTtsVoices("elevenlabs", null), {
+      wrapper,
+    });
 
     expect(result.current.fetchStatus).toBe("idle");
   });
@@ -422,10 +466,16 @@ describe("tts queries", () => {
 
   it("provides structured query keys via ttsKeys", () => {
     expect(ttsKeys.providers()).toEqual(["tts", "providers"]);
-    expect(ttsKeys.voices("elevenlabs")).toEqual([
+    expect(ttsKeys.models("elevenlabs")).toEqual([
+      "tts",
+      "models",
+      "elevenlabs",
+    ]);
+    expect(ttsKeys.voices("elevenlabs", "eleven_multilingual_v2")).toEqual([
       "tts",
       "voices",
       "elevenlabs",
+      "eleven_multilingual_v2",
     ]);
     expect(ttsKeys.dialogs()).toEqual(["tts", "dialogs"]);
     expect(ttsKeys.annotations(1)).toEqual(["tts", "annotations", 1]);

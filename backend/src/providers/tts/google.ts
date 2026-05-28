@@ -3,6 +3,7 @@ import type { protos } from '@google-cloud/text-to-speech';
 import type { ITTSProvider, IVoice, ISynthesizeOptions } from './types.js';
 
 type IAudioConfig = protos.google.cloud.texttospeech.v1.IAudioConfig;
+type IGoogleVoice = protos.google.cloud.texttospeech.v1.IVoice;
 
 interface GoogleCredentials {
   client_email: string;
@@ -44,6 +45,19 @@ const GENDER_MAP: Record<number, string> = {
   3: 'neutral',
 };
 
+const DEFAULT_MODEL = 'Default';
+const MODEL_ORDER = [
+  'Chirp3-HD',
+  'Chirp-HD',
+  'Neural2',
+  'Studio',
+  'Wavenet',
+  'News',
+  'Polyglot',
+  'Casual',
+  'Standard',
+] as const;
+
 function resolveGender(ssmlGender: string | number | null | undefined): string | undefined {
   if (typeof ssmlGender === 'number') {
     return GENDER_MAP[ssmlGender];
@@ -67,6 +81,23 @@ function extractLanguageCode(voiceId: string): string {
   return voiceId;
 }
 
+function extractModel(voiceId: string): string {
+  const match = /^(?:[a-z]{2,3}(?:-[A-Za-z0-9]{2,3})?)-(.+)-[^-]+$/.exec(voiceId);
+  return match?.[1] ?? DEFAULT_MODEL;
+}
+
+function sortModels(models: string[]): string[] {
+  return [...models].sort((a, b) => {
+    const aIndex = MODEL_ORDER.indexOf(a as (typeof MODEL_ORDER)[number]);
+    const bIndex = MODEL_ORDER.indexOf(b as (typeof MODEL_ORDER)[number]);
+
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
 export class GoogleTTSProvider implements ITTSProvider {
   readonly id = 'google';
   readonly name = 'Google Cloud TTS';
@@ -78,7 +109,7 @@ export class GoogleTTSProvider implements ITTSProvider {
     this.client = new TextToSpeechClient({ credentials });
   }
 
-  async getVoices(): Promise<IVoice[]> {
+  private async listGoogleVoices(): Promise<IGoogleVoice[]> {
     let response;
     try {
       [response] = await this.client.listVoices({});
@@ -87,9 +118,26 @@ export class GoogleTTSProvider implements ITTSProvider {
       throw new Error(`Google TTS API error: ${message}`);
     }
 
-    const voices = (response.voices ?? []).filter((v) => v.name);
+    return (response.voices ?? []).filter((v) => v.name);
+  }
 
-    return voices.map((v) => ({
+  async getModels(): Promise<string[]> {
+    const voices = await this.listGoogleVoices();
+    const models = new Set(
+      voices
+        .map((voice) => extractModel(voice.name as string))
+        .filter((model) => model !== DEFAULT_MODEL),
+    );
+    return sortModels([...models]);
+  }
+
+  async getVoices(model?: string): Promise<IVoice[]> {
+    const voices = await this.listGoogleVoices();
+    const filteredVoices = model
+      ? voices.filter((voice) => extractModel(voice.name as string) === model)
+      : voices;
+
+    return filteredVoices.map((v) => ({
       id: v.name as string,
       name: v.name as string,
       language: v.languageCodes?.[0] ?? 'unknown',
@@ -97,6 +145,7 @@ export class GoogleTTSProvider implements ITTSProvider {
       description: undefined,
       previewUrl: undefined,
       providerMeta: {
+        model: extractModel(v.name as string),
         naturalSampleRateHertz: v.naturalSampleRateHertz,
         ssmlGender: v.ssmlGender,
       },

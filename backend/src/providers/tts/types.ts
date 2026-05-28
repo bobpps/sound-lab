@@ -21,7 +21,8 @@ export interface ISynthesizeOptions {
 export interface ITTSProvider {
   readonly id: string;
   readonly name: string;
-  getVoices(): Promise<IVoice[]>;
+  getModels(): Promise<string[]>;
+  getVoices(model?: string): Promise<IVoice[]>;
   synthesize(opts: ISynthesizeOptions): Promise<Buffer>;
   validateCredentials(): Promise<boolean>;
 }

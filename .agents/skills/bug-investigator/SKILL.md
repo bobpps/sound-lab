@@ -176,6 +176,29 @@ Confirm:
 
 If these checks fail, stop and fix the checkout state first.
 
+### 4.5. Generate Isolated Port Configuration
+
+Run from the worktree root:
+
+```powershell
+pwsh ../../scripts/setup-worktree-env.ps1 -IssueNumber <issue-number>
+```
+
+This creates `backend/.env.local` and `frontend/.env.local` with unique
+`BACKEND_PORT` and `FRONTEND_PORT` values so the worktree's dev servers do not
+collide with the main checkout or other parallel worktrees.
+
+Capture the printed `Backend:` and `Frontend:` URLs. Treat the printed
+`Frontend:` URL as the canonical address for this investigation:
+
+- use it as the target for `npm run dev` browser checks
+- use it for every DevTools or Playwright MCP `navigate` call
+- never assume `localhost:5173` or `localhost:3000` while inside a worktree
+
+If the script reports that `.env.local` files already exist, inspect them to
+confirm they belong to this same investigation. Pass `-Force` only if you
+intentionally want to regenerate the ports.
+
 ### 5. Switch All Further Work To The Worktree
 
 After verification:
@@ -201,6 +224,10 @@ Use DevTools as the primary browser tool for both reproduction and inspection.
 Use Playwright only as fallback when DevTools is insufficient or when the flow is easier to stabilize with scripted automation.
 
 Before reproducing the bug, confirm that the current working checkout is the dedicated worktree created for this issue.
+
+Determine the actual frontend URL from `frontend/.env.local` (or the saved
+output of `setup-worktree-env.ps1`). Never default to `localhost:5173` while
+inside a worktree — the dev server runs on a worktree-specific port.
 
 During reproduction:
 

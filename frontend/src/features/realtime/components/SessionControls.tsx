@@ -1,6 +1,23 @@
 import { useState } from "react";
-import type { AgentPrompt } from "../../../types/api.ts";
+import type { AgentPrompt, Voice } from "../../../types/api.ts";
 import type { RealtimeConnectConfig } from "../hooks/useRealtimeSession.ts";
+
+const LANGUAGE_OPTIONS = [
+  { label: "Auto / provider default", value: "" },
+  { label: "English (US)", value: "en-US" },
+  { label: "English (UK)", value: "en-GB" },
+  { label: "Hungarian", value: "hu-HU" },
+  { label: "Russian", value: "ru-RU" },
+  { label: "Spanish", value: "es-ES" },
+  { label: "German", value: "de-DE" },
+  { label: "French", value: "fr-FR" },
+  { label: "Italian", value: "it-IT" },
+  { label: "Portuguese (BR)", value: "pt-BR" },
+  { label: "Japanese", value: "ja-JP" },
+  { label: "Korean", value: "ko-KR" },
+  { label: "Chinese (Simplified)", value: "zh-CN" },
+  { label: "Custom language code", value: "__custom__" },
+] as const;
 
 export interface CreatePromptDraft {
   language: string;
@@ -15,12 +32,18 @@ interface SessionControlsProps {
   isCreatingPrompt: boolean;
   isModelsLoading: boolean;
   isPromptsLoading: boolean;
+  isVoicesLoading: boolean;
+  languageMode: "auto-only" | "configurable";
   models: string[];
   modelsError: string | null;
   prompts: AgentPrompt[];
   promptsError: string | null;
   providerLabel: string;
+  selectedModel: string;
+  voices: Voice[];
+  voicesError: string | null;
   onCreatePrompt: (draft: CreatePromptDraft) => Promise<AgentPrompt>;
+  onModelChange: (model: string) => void;
   onStart: (config: RealtimeConnectConfig) => Promise<void>;
   onStop: () => Promise<void> | void;
 }
@@ -33,6 +56,10 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function formatVoiceName(voice: Voice): string {
+  return [voice.name, voice.gender].filter(Boolean).join(" · ");
+}
+
 export function SessionControls({
   error,
   isActive,
@@ -40,20 +67,28 @@ export function SessionControls({
   isCreatingPrompt,
   isModelsLoading,
   isPromptsLoading,
+  isVoicesLoading,
+  languageMode,
   models,
   modelsError,
   prompts,
   promptsError,
   providerLabel,
+  selectedModel,
+  voices,
+  voicesError,
   onCreatePrompt,
+  onModelChange,
   onStart,
   onStop,
 }: SessionControlsProps) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("");
+  const [customLanguage, setCustomLanguage] = useState("");
+  const [selectedLanguage, setSelectedLanguage] = useState<string | undefined>(undefined);
   const [selectedPromptId, setSelectedPromptId] = useState("");
+  const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [newPromptTitle, setNewPromptTitle] = useState("");
   const [newPromptLanguage, setNewPromptLanguage] = useState("en-US");
   const [newPromptBody, setNewPromptBody] = useState("");
@@ -67,6 +102,24 @@ export function SessionControls({
         : "";
   const selectedPrompt =
     prompts.find((prompt) => String(prompt.id) === resolvedPromptId) ?? null;
+  const isLanguageConfigurable = languageMode === "configurable";
+  const promptLanguage = isLanguageConfigurable ? selectedPrompt?.language ?? "" : "";
+  const candidateLanguage = isLanguageConfigurable
+    ? selectedLanguage ?? promptLanguage
+    : "";
+  const isCustomLanguageSelected = candidateLanguage === "__custom__";
+  const isUnknownLanguage =
+    candidateLanguage !== "" &&
+    !LANGUAGE_OPTIONS.some((option) => option.value === candidateLanguage);
+  const languageSelectValue =
+    isCustomLanguageSelected || isUnknownLanguage ? "__custom__" : candidateLanguage;
+  const resolvedLanguage = languageSelectValue === "__custom__"
+    ? customLanguage.trim() || (isUnknownLanguage ? candidateLanguage : "")
+    : candidateLanguage;
+  const resolvedVoiceId =
+    voices.find((voice) => voice.id === selectedVoiceId)?.id ??
+    voices[0]?.id ??
+    "";
 
   async function handleStart() {
     setFormError(null);
@@ -83,8 +136,10 @@ export function SessionControls({
 
     try {
       await onStart({
+        language: resolvedLanguage || undefined,
         model: resolvedModel,
         systemPrompt: selectedPrompt.prompt,
+        voice: resolvedVoiceId || undefined,
       });
     } catch (startError) {
       setFormError(
@@ -202,6 +257,12 @@ export function SessionControls({
         </div>
       ) : null}
 
+      {voicesError ? (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {voicesError}
+        </div>
+      ) : null}
+
       {formError || error ? (
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {formError ?? error}
@@ -216,7 +277,8 @@ export function SessionControls({
             value={resolvedModel}
             onChange={(event) => {
               setFormError(null);
-              setSelectedModel(event.target.value);
+              setSelectedVoiceId("");
+              onModelChange(event.target.value);
             }}
             disabled={isActive || isBusy || isModelsLoading || models.length === 0}
           >
@@ -230,6 +292,31 @@ export function SessionControls({
               ))
             ) : (
               <option value="">No models available</option>
+            )}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-gray-600">
+          Voice
+          <select
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            value={resolvedVoiceId}
+            onChange={(event) => {
+              setFormError(null);
+              setSelectedVoiceId(event.target.value);
+            }}
+            disabled={isActive || isBusy || isVoicesLoading || voices.length === 0}
+          >
+            {isVoicesLoading ? (
+              <option value="">Loading voices...</option>
+            ) : voices.length > 0 ? (
+              voices.map((voice) => (
+                <option key={voice.id} value={voice.id}>
+                  {formatVoiceName(voice)}
+                </option>
+              ))
+            ) : (
+              <option value="">Provider default</option>
             )}
           </select>
         </label>
@@ -257,6 +344,46 @@ export function SessionControls({
               <option value="">No prompts available</option>
             )}
           </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-gray-600">
+          Dialog Language
+          <select
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            value={languageSelectValue}
+            onChange={(event) => {
+              setFormError(null);
+              if (event.target.value === "__custom__") {
+                setCustomLanguage(isUnknownLanguage ? resolvedLanguage : "");
+                setSelectedLanguage("__custom__");
+                return;
+              }
+
+              setCustomLanguage("");
+              setSelectedLanguage(event.target.value);
+            }}
+            disabled={!isLanguageConfigurable || isActive || isBusy}
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <option key={option.value || "auto"} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {languageSelectValue === "__custom__" && isLanguageConfigurable ? (
+            <input
+              type="text"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+              placeholder="e.g. nl-NL"
+              value={customLanguage}
+              onChange={(event) => {
+                setFormError(null);
+                setCustomLanguage(event.target.value);
+                setSelectedLanguage(event.target.value.trim() || "__custom__");
+              }}
+              disabled={isActive || isBusy}
+            />
+          ) : null}
         </label>
       </div>
 

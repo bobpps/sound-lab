@@ -4,12 +4,14 @@ import type { IVoice } from '../../src/providers/tts/types.js';
 
 describe('TTS routes', () => {
   let app: FastifyInstance;
+  let mockGetModels: ReturnType<typeof vi.fn>;
   let mockGetVoices: ReturnType<typeof vi.fn>;
   let mockSynthesize: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    mockGetVoices = vi.fn<() => Promise<IVoice[]>>();
-    mockSynthesize = vi.fn<() => Promise<Buffer>>();
+    mockGetModels = vi.fn<() => Promise<string[]>>();
+    mockGetVoices = vi.fn<(model?: string) => Promise<IVoice[]>>();
+    mockSynthesize = vi.fn<(opts: unknown) => Promise<Buffer>>();
 
     app = await buildTestApp();
 
@@ -17,6 +19,7 @@ describe('TTS routes', () => {
     (app as Record<string, unknown>).createTTSProvider = vi.fn(() => ({
       id: 'test-provider',
       name: 'Test Provider',
+      getModels: mockGetModels,
       getVoices: mockGetVoices,
       synthesize: mockSynthesize,
       validateCredentials: vi.fn().mockResolvedValue(true),
@@ -32,6 +35,31 @@ describe('TTS routes', () => {
     await app.db.providers.create({ id, name, type: 'tts' });
     await app.db.providers.setKey(id, 'test-api-key');
   }
+
+  describe('GET /tts/:providerId/models', () => {
+    it('returns models from the TTS provider', async () => {
+      await seedTTSProvider();
+      const models = ['eleven_multilingual_v2'];
+      mockGetModels.mockResolvedValueOnce(models);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/tts/elevenlabs/models',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual(models);
+    });
+
+    it('returns 404 when provider does not exist', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/tts/nonexistent/models',
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+  });
 
   describe('GET /tts/:providerId/voices', () => {
     it('returns voices from the TTS provider', async () => {
@@ -49,6 +77,19 @@ describe('TTS routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual(voices);
+    });
+
+    it('passes model filter to the provider', async () => {
+      await seedTTSProvider();
+      mockGetVoices.mockResolvedValueOnce([]);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/tts/elevenlabs/voices?model=eleven_multilingual_v2',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(mockGetVoices).toHaveBeenCalledWith('eleven_multilingual_v2');
     });
 
     it('returns 404 when provider does not exist', async () => {
@@ -128,6 +169,7 @@ describe('TTS routes', () => {
         temperature: 0.7,
         format: 'mp3',
         sampleRate: 44100,
+        model: 'eleven_multilingual_v2',
       };
 
       await app.inject({

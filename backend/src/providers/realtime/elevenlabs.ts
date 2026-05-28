@@ -5,6 +5,7 @@ import type {
   RealtimeEvent,
   RealtimeSessionConfig,
 } from './types.js';
+import type { IVoice } from '../tts/types.js';
 
 const API_BASE_URL = 'https://api.elevenlabs.io';
 const LIST_AGENTS_URL = `${API_BASE_URL}/v1/convai/agents`;
@@ -21,6 +22,21 @@ interface ElevenLabsListAgentsResponse {
   agents?: ElevenLabsAgentSummary[];
   has_more?: boolean;
   next_cursor?: string | null;
+}
+
+interface ElevenLabsVoice {
+  voice_id?: string;
+  name?: string;
+  category?: string;
+  labels?: Record<string, string>;
+  description?: string | null;
+  preview_url?: string | null;
+  verified_languages?: Array<{ language?: string; locale?: string }>;
+  settings?: Record<string, unknown>;
+}
+
+interface ElevenLabsVoicesResponse {
+  voices?: ElevenLabsVoice[];
 }
 
 interface ElevenLabsSignedUrlResponse {
@@ -107,6 +123,31 @@ async function throwApiError(response: Response): Promise<never> {
   throw new Error(`ElevenLabs API error: ${response.status}${suffix}`);
 }
 
+function mapVoice(voice: ElevenLabsVoice): IVoice | null {
+  if (!voice.voice_id || !voice.name) {
+    return null;
+  }
+
+  const language =
+    voice.verified_languages?.[0]?.locale ??
+    voice.verified_languages?.[0]?.language ??
+    'en';
+
+  return {
+    id: voice.voice_id,
+    name: voice.name,
+    language,
+    gender: voice.labels?.gender,
+    description: voice.description ?? undefined,
+    previewUrl: voice.preview_url ?? undefined,
+    providerMeta: {
+      category: voice.category,
+      labels: voice.labels,
+      settings: voice.settings,
+    },
+  };
+}
+
 async function sendJson(socket: WebSocket, message: Record<string, unknown>): Promise<void> {
   if (socket.readyState !== WebSocket.OPEN) {
     throw new Error('ElevenLabs realtime socket is not open');
@@ -180,14 +221,24 @@ function buildConversationInitiationMessage(
   config: RealtimeSessionConfig,
 ): Record<string, unknown> {
   const conversationConfigOverride: Record<string, unknown> = {};
+  const agentOverride: Record<string, unknown> = {};
   const systemPrompt = config.systemPrompt.trim();
+  const language = config.language?.trim();
   const voiceId = config.voice?.trim();
 
   if (systemPrompt) {
+    agentOverride.prompt = {
+      prompt: systemPrompt,
+    };
+  }
+
+  if (language) {
+    agentOverride.language = language.split('-')[0]?.toLowerCase() ?? language;
+  }
+
+  if (Object.keys(agentOverride).length > 0) {
     conversationConfigOverride.agent = {
-      prompt: {
-        prompt: systemPrompt,
-      },
+      ...agentOverride,
     };
   }
 
@@ -296,6 +347,31 @@ export class ElevenLabsRealtimeProvider implements IRealtimeProvider {
     } while (cursor);
 
     return [...new Set(agentIds)];
+  }
+
+  async getVoices(): Promise<IVoice[]> {
+    const response = await fetch(`${API_BASE_URL}/v1/voices`, {
+      headers: {
+        'xi-api-key': this.apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      await throwApiError(response);
+    }
+
+    const data = await readJson<ElevenLabsVoicesResponse>(
+      response,
+      'ElevenLabs API returned an invalid voices response',
+    );
+
+    if (!Array.isArray(data.voices)) {
+      throw new Error('ElevenLabs API returned an invalid voices response');
+    }
+
+    return data.voices
+      .map(mapVoice)
+      .filter((voice): voice is IVoice => voice !== null);
   }
 
   async createSession(

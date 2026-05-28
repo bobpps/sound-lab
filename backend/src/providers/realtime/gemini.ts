@@ -1,11 +1,20 @@
 import WebSocket, { type RawData } from 'ws';
 import type { IRealtimeProvider, IRealtimeSession, RealtimeEvent, RealtimeSessionConfig } from './types.js';
+import type { IVoice } from '../tts/types.js';
 
 const GEMINI_REALTIME_URL =
   'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 const GEMINI_MODELS_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GEMINI_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
 const SESSION_CLOSE_TIMEOUT_MS = 5000;
+const GEMINI_VOICE_NAMES = [
+  'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir',
+  'Leda', 'Orus', 'Aoede', 'Callirrhoe', 'Autonoe',
+  'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina',
+  'Erinome', 'Algenib', 'Rasalgethi', 'Laomedeia', 'Achernar',
+  'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima', 'Achird',
+  'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat',
+] as const;
 
 interface GeminiModelRecord {
   name?: string;
@@ -378,6 +387,16 @@ export class GeminiRealtimeProvider implements IRealtimeProvider {
     } while (pageToken);
 
     return [...models].sort();
+  }
+
+  async getVoices(model?: string): Promise<IVoice[]> {
+    const supportedModels = model ? [model] : [];
+    return GEMINI_VOICE_NAMES.map((name) => ({
+      id: name,
+      name,
+      language: 'multi',
+      providerMeta: { supportedModels },
+    }));
   }
 
   async createSession(

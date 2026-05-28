@@ -111,6 +111,23 @@ describe('OpenAITTSProvider', () => {
         expect(voice.providerMeta!.supportedModels).toEqual(['gpt-4o-mini-tts']);
       }
     });
+
+    it('filters voices by model', async () => {
+      const voices = await provider.getVoices('tts-1');
+
+      expect(voices).toHaveLength(9);
+      expect(voices.map((v) => v.id)).not.toContain('ballad');
+    });
+  });
+
+  describe('getModels', () => {
+    it('returns supported models', async () => {
+      await expect(provider.getModels()).resolves.toEqual([
+        'gpt-4o-mini-tts',
+        'tts-1',
+        'tts-1-hd',
+      ]);
+    });
   });
 
   describe('synthesize', () => {

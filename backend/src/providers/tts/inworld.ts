@@ -2,6 +2,7 @@ import type { ITTSProvider, IVoice, ISynthesizeOptions } from './types.js';
 
 const BASE_URL = 'https://api.inworld.ai';
 const DEFAULT_MODEL = 'inworld-tts-1.5-max';
+const MODELS = [DEFAULT_MODEL] as const;
 
 // Private interfaces for Inworld API responses
 interface InworldVoice {
@@ -34,7 +35,12 @@ function mapVoice(v: InworldVoice): IVoice {
     gender,
     description: v.description ?? undefined,
     previewUrl: undefined,
-    providerMeta: { langCode: v.langCode, tags: v.tags, source: v.source },
+    providerMeta: {
+      langCode: v.langCode,
+      tags: v.tags,
+      source: v.source,
+      supportedModels: [...MODELS],
+    },
   };
 }
 
@@ -57,6 +63,10 @@ export class InworldTTSProvider implements ITTSProvider {
 
   constructor(private readonly apiKey: string) {}
 
+  async getModels(): Promise<string[]> {
+    return [...MODELS];
+  }
+
   async getVoices(): Promise<IVoice[]> {
     const response = await fetch(`${BASE_URL}/voices/v1/voices`, {
       headers: { Authorization: `Basic ${this.apiKey}` },
@@ -74,7 +84,7 @@ export class InworldTTSProvider implements ITTSProvider {
     const body: Record<string, unknown> = {
       text: opts.text,
       voiceId: opts.voiceId,
-      modelId: DEFAULT_MODEL,
+      modelId: opts.model ?? DEFAULT_MODEL,
     };
     if (opts.temperature !== undefined) body.temperature = opts.temperature;
     if (audioConfig !== undefined) body.audioConfig = audioConfig;

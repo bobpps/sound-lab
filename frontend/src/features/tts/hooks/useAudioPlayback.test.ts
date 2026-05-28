@@ -82,7 +82,13 @@ describe("useAudioPlayback", () => {
 
   it("starts in idle state", () => {
     const { result } = renderHook(() =>
-      useAudioPlayback({ providerId: "google", messages, voiceMap, synthesize: synthesizeFn }),
+      useAudioPlayback({
+        providerId: "google",
+        model: "Chirp3-HD",
+        messages,
+        voiceMap,
+        synthesize: synthesizeFn,
+      }),
     );
 
     expect(result.current.status).toBe("idle");
@@ -91,7 +97,13 @@ describe("useAudioPlayback", () => {
 
   it("starts playback and sets status to playing", async () => {
     const { result } = renderHook(() =>
-      useAudioPlayback({ providerId: "google", messages, voiceMap, synthesize: synthesizeFn }),
+      useAudioPlayback({
+        providerId: "google",
+        model: "Chirp3-HD",
+        messages,
+        voiceMap,
+        synthesize: synthesizeFn,
+      }),
     );
 
     await act(async () => {
@@ -100,12 +112,18 @@ describe("useAudioPlayback", () => {
 
     expect(result.current.status).toBe("playing");
     expect(result.current.currentIndex).toBe(0);
-    expect(synthesizeFn).toHaveBeenCalledWith("google", "voice-alice", "Hello there.", expect.any(AbortSignal));
+    expect(synthesizeFn).toHaveBeenCalledWith("google", "Chirp3-HD", "voice-alice", "Hello there.", expect.any(AbortSignal));
   });
 
   it("advances to next message when audio ends", async () => {
     const { result } = renderHook(() =>
-      useAudioPlayback({ providerId: "google", messages, voiceMap, synthesize: synthesizeFn }),
+      useAudioPlayback({
+        providerId: "google",
+        model: "Chirp3-HD",
+        messages,
+        voiceMap,
+        synthesize: synthesizeFn,
+      }),
     );
 
     await act(async () => {
@@ -119,12 +137,18 @@ describe("useAudioPlayback", () => {
     });
 
     expect(result.current.currentIndex).toBe(1);
-    expect(synthesizeFn).toHaveBeenCalledWith("google", "voice-bob", "Hi, how are you?", expect.any(AbortSignal));
+    expect(synthesizeFn).toHaveBeenCalledWith("google", "Chirp3-HD", "voice-bob", "Hi, how are you?", expect.any(AbortSignal));
   });
 
   it("stops playback and resets state", async () => {
     const { result } = renderHook(() =>
-      useAudioPlayback({ providerId: "google", messages, voiceMap, synthesize: synthesizeFn }),
+      useAudioPlayback({
+        providerId: "google",
+        model: "Chirp3-HD",
+        messages,
+        voiceMap,
+        synthesize: synthesizeFn,
+      }),
     );
 
     await act(async () => {
@@ -150,6 +174,7 @@ describe("useAudioPlayback", () => {
     const { result } = renderHook(() =>
       useAudioPlayback({
         providerId: "google",
+        model: "Chirp3-HD",
         messages: singleMessage,
         voiceMap,
         synthesize: synthesizeFn,
@@ -178,6 +203,7 @@ describe("useAudioPlayback", () => {
     const { result } = renderHook(() =>
       useAudioPlayback({
         providerId: "google",
+        model: "Chirp3-HD",
         messages: singleMessage,
         voiceMap,
         synthesize: synthesizeFn,
@@ -203,6 +229,7 @@ describe("useAudioPlayback", () => {
     const { result } = renderHook(() =>
       useAudioPlayback({
         providerId: "google",
+        model: "Chirp3-HD",
         messages,
         voiceMap,
         synthesize: failingSynthesize,
@@ -223,6 +250,7 @@ describe("useAudioPlayback", () => {
     const { result } = renderHook(() =>
       useAudioPlayback({
         providerId: "google",
+        model: "Chirp3-HD",
         messages,
         voiceMap: incompleteMap,
         synthesize: synthesizeFn,
@@ -236,6 +264,7 @@ describe("useAudioPlayback", () => {
     const { result } = renderHook(() =>
       useAudioPlayback({
         providerId: "google",
+        model: "Chirp3-HD",
         messages,
         voiceMap,
         synthesize: synthesizeFn,

@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import WebSocket, { type RawData } from 'ws';
 import type { IRealtimeProvider, IRealtimeSession, RealtimeEvent, RealtimeSessionConfig } from './types.js';
+import type { IVoice } from '../tts/types.js';
 
 const REALTIME_MODEL_PREFIXES = [
   'gpt-realtime',
@@ -10,6 +11,21 @@ const REALTIME_MODEL_PREFIXES = [
 
 const DEFAULT_INPUT_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 const OPENAI_REALTIME_URL = 'wss://api.openai.com/v1/realtime';
+const OPENAI_INPUT_AUDIO_RATE = 16000;
+const OPENAI_OUTPUT_AUDIO_RATE = 24000;
+const OPENAI_OUTPUT_AUDIO_MIME_TYPE = `audio/pcm;rate=${OPENAI_OUTPUT_AUDIO_RATE}`;
+const OPENAI_REALTIME_VOICE_IDS = [
+  'alloy',
+  'ash',
+  'ballad',
+  'coral',
+  'echo',
+  'sage',
+  'shimmer',
+  'verse',
+  'marin',
+  'cedar',
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -42,6 +58,10 @@ function parseJsonMessage(raw: RawData): Record<string, unknown> | null {
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function extractRealtimeError(message: Record<string, unknown>): {
@@ -92,6 +112,7 @@ function createAudioEvent(message: Record<string, unknown>): RealtimeEvent | nul
     type: 'audio',
     data: {
       chunk: message.delta,
+      mimeType: OPENAI_OUTPUT_AUDIO_MIME_TYPE,
       itemId: typeof message.item_id === 'string' ? message.item_id : undefined,
       responseId: typeof message.response_id === 'string' ? message.response_id : undefined,
       contentIndex: typeof message.content_index === 'number' ? message.content_index : undefined,
@@ -132,6 +153,7 @@ function closeSocket(socket: WebSocket, code: number, reason: string): void {
 }
 
 function buildSessionUpdate(config: RealtimeSessionConfig): Record<string, unknown> {
+  const language = config.language?.trim();
   const session: Record<string, unknown> = {
     type: 'realtime',
     model: config.model,
@@ -141,13 +163,14 @@ function buildSessionUpdate(config: RealtimeSessionConfig): Record<string, unkno
       input: {
         format: {
           type: 'audio/pcm',
-          rate: 24000,
+          rate: OPENAI_INPUT_AUDIO_RATE,
         },
         noise_reduction: {
           type: 'near_field',
         },
         transcription: {
           model: DEFAULT_INPUT_TRANSCRIPTION_MODEL,
+          ...(language ? { language } : {}),
         },
         turn_detection: {
           type: 'server_vad',
@@ -158,7 +181,7 @@ function buildSessionUpdate(config: RealtimeSessionConfig): Record<string, unkno
       output: {
         format: {
           type: 'audio/pcm',
-          rate: 24000,
+          rate: OPENAI_OUTPUT_AUDIO_RATE,
         },
       },
     },
@@ -246,6 +269,15 @@ export class OpenAIRealtimeProvider implements IRealtimeProvider {
     }
 
     return [...models].sort();
+  }
+
+  async getVoices(): Promise<IVoice[]> {
+    return OPENAI_REALTIME_VOICE_IDS.map((voiceId) => ({
+      id: voiceId,
+      name: capitalize(voiceId),
+      language: 'multi',
+      providerMeta: { type: 'builtin' },
+    }));
   }
 
   async createSession(

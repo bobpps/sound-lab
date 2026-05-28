@@ -126,6 +126,7 @@ describe('GoogleTTSProvider', () => {
         description: undefined,
         previewUrl: undefined,
         providerMeta: {
+          model: 'Wavenet',
           naturalSampleRateHertz: 24000,
           ssmlGender: 'FEMALE',
         },
@@ -232,12 +233,43 @@ describe('GoogleTTSProvider', () => {
       expect(mockListVoices).toHaveBeenCalledWith({});
     });
 
+    it('filters voices by model', async () => {
+      mockListVoices.mockResolvedValue(googleVoicesResponse);
+
+      const voices = await provider.getVoices('Neural2');
+
+      expect(voices).toHaveLength(1);
+      expect(voices[0]!.id).toBe('ja-JP-Neural2-C');
+      expect(voices[0]!.providerMeta?.model).toBe('Neural2');
+    });
+
     it('throws on API error', async () => {
       mockListVoices.mockRejectedValue(new Error('API unavailable'));
 
       await expect(provider.getVoices()).rejects.toThrow(
         'Google TTS API error: API unavailable',
       );
+    });
+  });
+
+  describe('getModels', () => {
+    it('returns unique models from Google voices in preferred order', async () => {
+      mockListVoices.mockResolvedValue([
+        {
+          voices: [
+            { name: 'en-US-Standard-A', languageCodes: ['en-US'] },
+            { name: 'en-US-Chirp3-HD-Achernar', languageCodes: ['en-US'] },
+            { name: 'Kore', languageCodes: ['en-US'] },
+            { name: 'en-US-Neural2-C', languageCodes: ['en-US'] },
+            { name: 'fil-ph-Neural2-A', languageCodes: ['fil-ph'] },
+            { name: 'en-US-Standard-B', languageCodes: ['en-US'] },
+          ],
+        },
+      ]);
+
+      const models = await provider.getModels();
+
+      expect(models).toEqual(['Chirp3-HD', 'Neural2', 'Standard']);
     });
   });
 

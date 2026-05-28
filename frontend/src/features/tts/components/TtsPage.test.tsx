@@ -57,6 +57,8 @@ const voices = [
   { id: "voice-2", name: "Bob", language: "en-US", gender: "male" },
 ];
 
+const ttsModels = ["eleven_multilingual_v2"];
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -97,7 +99,11 @@ describe("TtsPage", () => {
           return jsonResponse(dialogWithMessages);
         }
 
-        if (url.endsWith("/api/tts/elevenlabs/voices")) {
+        if (url.endsWith("/api/tts/elevenlabs/models")) {
+          return jsonResponse(ttsModels);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/voices?model=eleven_multilingual_v2")) {
           return jsonResponse(voices);
         }
 
@@ -173,6 +179,26 @@ describe("TtsPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows model selector after selecting a dialog", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<TtsPage />);
+
+    const providerSelect = await screen.findByRole("combobox", {
+      name: "TTS Provider",
+    });
+    await user.selectOptions(providerSelect, "elevenlabs");
+
+    const dialogSelect = await screen.findByRole("combobox", {
+      name: "Dialog",
+    });
+    await user.selectOptions(dialogSelect, "1");
+
+    expect(
+      await screen.findByRole("combobox", { name: "TTS Model" }),
+    ).toBeInTheDocument();
+  });
+
   it("resets dialog and annotation when provider changes", async () => {
     const user = userEvent.setup();
 
@@ -201,6 +227,14 @@ describe("TtsPage", () => {
 
         if (url.endsWith("/api/dialogs/1/annotations")) {
           return jsonResponse(annotations);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/models")) {
+          return jsonResponse(ttsModels);
+        }
+
+        if (url.endsWith("/api/tts/google/models")) {
+          return jsonResponse(["Chirp3-HD"]);
         }
 
         return jsonResponse({ message: "Not Found" }, 404);
@@ -235,6 +269,9 @@ describe("TtsPage", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("combobox", { name: "Annotation Variant" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "TTS Model" }),
     ).not.toBeInTheDocument();
   });
 
@@ -318,7 +355,12 @@ describe("TtsPage", () => {
     });
     await user.selectOptions(dialogSelect, "1");
 
-    // Voice assignment should appear (voices load for the selected provider)
+    const modelSelect = await screen.findByRole("combobox", {
+      name: "TTS Model",
+    });
+    await user.selectOptions(modelSelect, "eleven_multilingual_v2");
+
+    // Voice assignment should appear (voices load for the selected provider and model)
     expect(
       await screen.findByLabelText("Character 1 voice"),
     ).toBeInTheDocument();

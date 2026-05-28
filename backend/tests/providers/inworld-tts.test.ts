@@ -97,6 +97,7 @@ describe('InworldTTSProvider', () => {
           langCode: 'EN_US',
           tags: ['female', 'conversational', 'warm'],
           source: 'SYSTEM',
+          supportedModels: ['inworld-tts-1.5-max'],
         },
       });
     });
@@ -172,6 +173,7 @@ describe('InworldTTSProvider', () => {
           langCode: 'FR_FR',
           tags: [],
           source: 'SYSTEM',
+          supportedModels: ['inworld-tts-1.5-max'],
         },
       });
     });
@@ -207,6 +209,12 @@ describe('InworldTTSProvider', () => {
       await expect(provider.getVoices()).rejects.toThrow(
         'Inworld API error: 500 Server Error',
       );
+    });
+  });
+
+  describe('getModels', () => {
+    it('returns supported models', async () => {
+      await expect(provider.getModels()).resolves.toEqual(['inworld-tts-1.5-max']);
     });
   });
 
@@ -263,6 +271,21 @@ describe('InworldTTSProvider', () => {
         voiceId: 'voice-1',
         modelId: 'inworld-tts-1.5-max',
       });
+    });
+
+    it('uses selected model when provided', async () => {
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify(synthesizeResponse), { status: 200 }),
+      );
+
+      await provider.synthesize({
+        voiceId: 'voice-1',
+        text: 'Hello',
+        model: 'inworld-tts-1.5-max',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody.modelId).toBe('inworld-tts-1.5-max');
     });
 
     it('includes audioConfig when speed is provided', async () => {

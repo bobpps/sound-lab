@@ -60,10 +60,30 @@ const ttsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     }
   }
 
+  // GET /tts/:providerId/models
+  fastify.get('/:providerId/models', {
+    schema: {
+      params: ProviderIdParam,
+      response: {
+        200: Type.Array(Type.String()),
+        400: ErrorResponse,
+        404: ErrorResponse,
+      },
+    },
+  }, async (request, reply) => {
+    const tts = await resolveTTSProvider(request.params.providerId, reply);
+    if (!tts) return;
+
+    return tts.getModels();
+  });
+
   // GET /tts/:providerId/voices
   fastify.get('/:providerId/voices', {
     schema: {
       params: ProviderIdParam,
+      querystring: Type.Object({
+        model: Type.Optional(Type.String()),
+      }),
       response: {
         200: Type.Array(Voice),
         400: ErrorResponse,
@@ -74,7 +94,7 @@ const ttsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const tts = await resolveTTSProvider(request.params.providerId, reply);
     if (!tts) return;
 
-    const voices = await tts.getVoices();
+    const voices = await tts.getVoices(request.query.model);
     return voices;
   });
 
