@@ -2,6 +2,14 @@ import { useState } from "react";
 import type { AgentPrompt, Voice } from "../../../types/api.ts";
 import type { RealtimeConnectConfig } from "../hooks/useRealtimeSession.ts";
 
+const LANGUAGE_OPTIONS = [
+  { value: "en-US", label: "English (US)" },
+  { value: "en-GB", label: "English (UK)" },
+  { value: "de-DE", label: "German" },
+  { value: "fr-FR", label: "French" },
+  { value: "es-ES", label: "Spanish" },
+] as const;
+
 export interface CreatePromptDraft {
   language: string;
   prompt: string;
@@ -43,6 +51,10 @@ function formatVoiceName(voice: Voice): string {
   return [voice.name, voice.gender].filter(Boolean).join(" · ");
 }
 
+function hasLanguageOption(language: string): boolean {
+  return LANGUAGE_OPTIONS.some((option) => option.value === language);
+}
+
 export function SessionControls({
   error,
   isActive,
@@ -70,6 +82,8 @@ export function SessionControls({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedPromptId, setSelectedPromptId] = useState("");
   const [selectedVoiceId, setSelectedVoiceId] = useState("");
+  const [selectedLanguage, setSelectedLanguage] = useState("");
+  const [customLanguage, setCustomLanguage] = useState("");
   const [newPromptTitle, setNewPromptTitle] = useState("");
   const [newPromptLanguage, setNewPromptLanguage] = useState("en-US");
   const [newPromptBody, setNewPromptBody] = useState("");
@@ -85,8 +99,22 @@ export function SessionControls({
     prompts.find((prompt) => String(prompt.id) === resolvedPromptId) ?? null;
   // Language is driven by the selected prompt. Providers in "auto-only" mode
   // (e.g. Gemini) ignore an explicit language, so we leave it unset for them.
+  const selectedPromptLanguage = selectedPrompt?.language ?? "";
+  const languageSelectValue =
+    languageMode === "auto-only"
+      ? "__auto__"
+      : selectedLanguage ||
+        (hasLanguageOption(selectedPromptLanguage)
+          ? selectedPromptLanguage
+          : selectedPromptLanguage
+            ? "__custom__"
+            : "");
   const resolvedLanguage =
-    languageMode === "configurable" ? selectedPrompt?.language ?? "" : "";
+    languageMode === "configurable"
+      ? languageSelectValue === "__custom__"
+        ? customLanguage.trim() || selectedPromptLanguage
+        : languageSelectValue
+      : "";
   const resolvedVoiceId =
     voices.find((voice) => voice.id === selectedVoiceId)?.id ??
     voices[0]?.id ??
@@ -300,6 +328,8 @@ export function SessionControls({
             onChange={(event) => {
               setFormError(null);
               setSelectedPromptId(event.target.value);
+              setSelectedLanguage("");
+              setCustomLanguage("");
             }}
             disabled={isActive || isBusy || isPromptsLoading || prompts.length === 0}
           >
@@ -316,7 +346,54 @@ export function SessionControls({
             )}
           </select>
         </label>
+
+        <label className="flex flex-col gap-1 text-sm text-gray-600">
+          Dialog Language
+          <select
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            value={languageSelectValue}
+            onChange={(event) => {
+              const nextLanguage = event.target.value;
+              setFormError(null);
+              setSelectedLanguage(nextLanguage);
+              if (nextLanguage === "__custom__") {
+                setCustomLanguage(customLanguage || selectedPromptLanguage);
+              }
+            }}
+            disabled={isActive || isBusy || languageMode === "auto-only"}
+          >
+            {languageMode === "auto-only" ? (
+              <option value="__auto__">Auto / provider default</option>
+            ) : (
+              <>
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+                <option value="__custom__">Custom language code</option>
+              </>
+            )}
+          </select>
+        </label>
       </div>
+
+      {languageMode === "configurable" && languageSelectValue === "__custom__" ? (
+        <label className="mt-4 flex max-w-md flex-col gap-1 text-sm text-gray-600">
+          Custom language code
+          <input
+            type="text"
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            value={customLanguage}
+            onChange={(event) => {
+              setFormError(null);
+              setCustomLanguage(event.target.value);
+            }}
+            placeholder="e.g. nl-NL"
+            disabled={isActive || isBusy}
+          />
+        </label>
+      ) : null}
 
       {selectedPrompt ? (
         <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
