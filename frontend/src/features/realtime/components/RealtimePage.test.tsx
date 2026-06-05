@@ -204,9 +204,8 @@ describe("RealtimePage", () => {
     ).toBeInTheDocument();
     expect(await screen.findByDisplayValue("Marin · female")).toBeInTheDocument();
     expect(screen.getByText("Marin · female")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("English (US)")).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Dialog Language"), "__custom__");
-    expect(screen.getByPlaceholderText("e.g. nl-NL")).toBeInTheDocument();
+    expect(screen.getByText("Language: en-US")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Dialog Language")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Gemini" }));
 
@@ -215,7 +214,7 @@ describe("RealtimePage", () => {
       screen.getByDisplayValue("gemini-2.5-flash-preview-native-audio-dialog"),
     ).toBeInTheDocument();
     expect(await screen.findByDisplayValue("Kore")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Auto / provider default")).toBeDisabled();
+    expect(screen.queryByLabelText("Dialog Language")).not.toBeInTheDocument();
   });
 
   it("creates a new agent prompt inline for the active provider", async () => {
@@ -236,5 +235,27 @@ describe("RealtimePage", () => {
     await user.click(screen.getByRole("button", { name: "Save Prompt" }));
 
     expect((await screen.findAllByText("Sales rep")).length).toBeGreaterThan(0);
+  });
+
+  it("creates a prompt without a language and shows auto-detection", async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(screen.getByRole("tab", { name: "ElevenLabs" }));
+    await screen.findByText("ElevenLabs Session");
+    await user.click(screen.getByRole("button", { name: "Create Prompt" }));
+    await user.type(screen.getByLabelText("Prompt title"), "Multilingual rep");
+    await user.clear(screen.getByLabelText("Language"));
+    await user.type(
+      screen.getByLabelText("Prompt body"),
+      "Act as a polite multilingual representative.",
+    );
+    await user.click(screen.getByRole("button", { name: "Save Prompt" }));
+
+    expect(
+      (await screen.findAllByText("Multilingual rep")).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Language: Auto-detect")).toBeInTheDocument();
   });
 });
