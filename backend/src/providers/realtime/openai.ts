@@ -152,12 +152,30 @@ function sendJson(socket: WebSocket, payload: Record<string, unknown>): Promise<
   });
 }
 
+// WebSocket close frames cap the reason at 123 bytes; an oversized reason makes
+// `ws` throw a RangeError that would otherwise crash the process. Trim by code
+// point so the UTF-8 byte length always fits.
+const MAX_CLOSE_REASON_BYTES = 123;
+
+function truncateCloseReason(reason: string): string {
+  if (Buffer.byteLength(reason) <= MAX_CLOSE_REASON_BYTES) {
+    return reason;
+  }
+
+  let truncated = reason;
+  while (truncated.length > 0 && Buffer.byteLength(truncated) > MAX_CLOSE_REASON_BYTES) {
+    truncated = truncated.slice(0, -1);
+  }
+
+  return truncated;
+}
+
 function closeSocket(socket: WebSocket, code: number, reason: string): void {
   if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
     return;
   }
 
-  socket.close(code, reason);
+  socket.close(code, truncateCloseReason(reason));
 }
 
 function buildSessionUpdate(config: RealtimeSessionConfig): Record<string, unknown> {

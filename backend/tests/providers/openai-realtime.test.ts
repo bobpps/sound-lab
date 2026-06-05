@@ -17,6 +17,12 @@ const { MockOpenAI, MockWebSocket, mockSocketInstances } = vi.hoisted(() => {
       return true;
     });
     close = vi.fn((code?: number, reason?: string) => {
+      // Mirror the ws library: a close reason above 123 bytes throws, which
+      // would otherwise crash the process if left unhandled.
+      if (reason !== undefined && Buffer.byteLength(reason) > 123) {
+        throw new RangeError('The message must not be greater than 123 bytes');
+      }
+
       this.readyState = MockWebSocket.CLOSED;
       this.emit('close', code ?? 1000, Buffer.from(reason ?? ''));
     });
@@ -384,6 +390,42 @@ describe('OpenAIRealtimeProvider', () => {
       },
     });
     expect(socket.close).toHaveBeenCalledWith(1011, 'Invalid model');
+  });
+
+  it('truncates long upstream errors so the close frame stays within 123 bytes', async () => {
+    const onEvent = vi.fn<(event: RealtimeEvent) => void>();
+    const longMessage =
+      "Invalid value: 'en-US'. Supported values are: 'af', 'ar', 'az', 'be', " +
+      "'bg', 'bs', 'ca', 'cs', 'cy', 'da', 'de', 'el', 'en', 'es', 'et', 'fa'.";
+    const sessionPromise = provider.createSession(
+      {
+        model: 'gpt-realtime',
+        systemPrompt: 'Be concise',
+      },
+      onEvent,
+    );
+
+    const socket = mockSocketInstances[0];
+    socket.open();
+
+    // Must not throw a RangeError from the oversized close reason.
+    expect(() => {
+      socket.emitMessage({
+        type: 'error',
+        error: {
+          message: longMessage,
+        },
+      });
+    }).not.toThrow();
+
+    // The user-facing rejection keeps the full message...
+    await expect(sessionPromise).rejects.toThrow(longMessage);
+
+    // ...while the close frame reason is trimmed to <= 123 bytes.
+    expect(socket.close).toHaveBeenCalledTimes(1);
+    const [closeCode, closeReason] = socket.close.mock.calls[0];
+    expect(closeCode).toBe(1011);
+    expect(Buffer.byteLength(closeReason)).toBeLessThanOrEqual(123);
   });
 
   it('does not emit session_end when the session is closed intentionally', async () => {
