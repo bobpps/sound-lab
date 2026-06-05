@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const TARGET_SAMPLE_RATE = 16_000;
+const DEFAULT_TARGET_SAMPLE_RATE = 16_000;
 const MICROPHONE_WORKLET_NAME = "realtime-microphone-processor";
 const MICROPHONE_WORKLET_SOURCE = `
 class RealtimeMicrophoneProcessor extends AudioWorkletProcessor {
@@ -21,7 +21,7 @@ class RealtimeMicrophoneProcessor extends AudioWorkletProcessor {
       : new Float32Array(0);
 
     this.port.postMessage(
-      { type: "flushed", sampleRate, samples },
+      { type: "flushed", samples },
       [samples.buffer],
     );
 
@@ -48,7 +48,7 @@ class RealtimeMicrophoneProcessor extends AudioWorkletProcessor {
       if (this.offset === this.buffer.length) {
         const samples = this.buffer;
         this.port.postMessage(
-          { type: "chunk", sampleRate, samples },
+          { type: "chunk", samples },
           [samples.buffer],
         );
         this.buffer = new Float32Array(4096);
@@ -67,6 +67,9 @@ const loadedAudioWorklets = new WeakSet<AudioContext>();
 
 export interface UseMicrophoneStartOptions {
   onChunk?: (chunk: Uint8Array) => void | Promise<void>;
+  // PCM rate the captured audio is resampled to before being sent to the
+  // realtime provider. Defaults to 16 kHz; OpenAI Realtime requires 24 kHz.
+  targetSampleRate?: number;
 }
 
 interface UseMicrophoneResult {
@@ -87,41 +90,6 @@ function getAudioContextConstructor(): AudioContextConstructor | undefined {
   return window.AudioContext ?? (window as typeof window & {
     webkitAudioContext?: AudioContextConstructor;
   }).webkitAudioContext;
-}
-
-function downsampleBuffer(
-  input: Float32Array,
-  sourceSampleRate: number,
-  targetSampleRate: number,
-): Float32Array {
-  if (sourceSampleRate === targetSampleRate) {
-    return input;
-  }
-
-  const sampleRateRatio = sourceSampleRate / targetSampleRate;
-  const outputLength = Math.round(input.length / sampleRateRatio);
-  const output = new Float32Array(outputLength);
-
-  let inputIndex = 0;
-  for (let outputIndex = 0; outputIndex < outputLength; outputIndex += 1) {
-    const nextInputIndex = Math.round((outputIndex + 1) * sampleRateRatio);
-    let sum = 0;
-    let count = 0;
-
-    for (
-      let sampleIndex = inputIndex;
-      sampleIndex < nextInputIndex && sampleIndex < input.length;
-      sampleIndex += 1
-    ) {
-      sum += input[sampleIndex];
-      count += 1;
-    }
-
-    output[outputIndex] = count > 0 ? sum / count : 0;
-    inputIndex = nextInputIndex;
-  }
-
-  return output;
 }
 
 function floatToPcm16(input: Float32Array): Uint8Array {
@@ -233,6 +201,7 @@ export function useMicrophone(): UseMicrophoneResult {
   }, []);
 
   const start = useCallback(async (options: UseMicrophoneStartOptions = {}) => {
+    const targetSampleRate = options.targetSampleRate ?? DEFAULT_TARGET_SAMPLE_RATE;
     if (
       typeof navigator === "undefined" ||
       !navigator.mediaDevices?.getUserMedia
@@ -251,8 +220,34 @@ export function useMicrophone(): UseMicrophoneResult {
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
+    // Capture directly at the target rate so no manual resampling is needed.
+    const existingContext = audioContextRef.current;
+    if (existingContext && existingContext.sampleRate !== targetSampleRate) {
+      await existingContext.close();
+      audioContextRef.current = null;
+    }
+
     if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContextCtor();
+      let context: AudioContext;
+      try {
+        context = new AudioContextCtor({ sampleRate: targetSampleRate });
+      } catch {
+        context = new AudioContextCtor();
+      }
+
+      if (context.sampleRate !== targetSampleRate) {
+        await context.close();
+        for (const track of stream.getTracks()) {
+          track.stop();
+        }
+
+        const message =
+          `This browser cannot capture microphone audio at ${targetSampleRate} Hz.`;
+        setError(message);
+        throw new Error(message);
+      }
+
+      audioContextRef.current = context;
     }
 
     if (audioContextRef.current.state === "suspended") {
@@ -311,7 +306,6 @@ export function useMicrophone(): UseMicrophoneResult {
     setIsRecording(true);
 
     workletNode.port.onmessage = (event: MessageEvent<{
-      sampleRate?: number;
       samples?: Float32Array;
       type?: string;
     }>) => {
@@ -323,12 +317,9 @@ export function useMicrophone(): UseMicrophoneResult {
         return;
       }
 
-      const resampled = downsampleBuffer(
-        event.data.samples,
-        event.data.sampleRate ?? audioContext.sampleRate,
-        TARGET_SAMPLE_RATE,
-      );
-      const pcmChunk = floatToPcm16(resampled);
+      // The context already runs at the target rate, so the samples are sent
+      // straight through without resampling.
+      const pcmChunk = floatToPcm16(event.data.samples);
 
       pendingChunkSendsRef.current = pendingChunkSendsRef.current
         .catch(() => undefined)

@@ -11,7 +11,9 @@ const REALTIME_MODEL_PREFIXES = [
 
 const DEFAULT_INPUT_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 const OPENAI_REALTIME_URL = 'wss://api.openai.com/v1/realtime';
-const OPENAI_INPUT_AUDIO_RATE = 16000;
+// OpenAI Realtime requires the input PCM rate to be >= 24000; the frontend
+// microphone capture is resampled to match this value (see useMicrophone).
+const OPENAI_INPUT_AUDIO_RATE = 24000;
 const OPENAI_OUTPUT_AUDIO_RATE = 24000;
 const OPENAI_OUTPUT_AUDIO_MIME_TYPE = `audio/pcm;rate=${OPENAI_OUTPUT_AUDIO_RATE}`;
 const OPENAI_REALTIME_VOICE_IDS = [
@@ -62,6 +64,12 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+// OpenAI Realtime transcription expects an ISO 639-1 code (e.g. "en"),
+// not a full BCP-47 tag like "en-US". Use the primary language subtag.
+function toRealtimeLanguageCode(language: string): string {
+  return language.split(/[-_]/)[0].toLowerCase();
 }
 
 function extractRealtimeError(message: Record<string, unknown>): {
@@ -144,12 +152,30 @@ function sendJson(socket: WebSocket, payload: Record<string, unknown>): Promise<
   });
 }
 
+// WebSocket close frames cap the reason at 123 bytes; an oversized reason makes
+// `ws` throw a RangeError that would otherwise crash the process. Trim by code
+// point so the UTF-8 byte length always fits.
+const MAX_CLOSE_REASON_BYTES = 123;
+
+function truncateCloseReason(reason: string): string {
+  if (Buffer.byteLength(reason) <= MAX_CLOSE_REASON_BYTES) {
+    return reason;
+  }
+
+  let truncated = reason;
+  while (truncated.length > 0 && Buffer.byteLength(truncated) > MAX_CLOSE_REASON_BYTES) {
+    truncated = truncated.slice(0, -1);
+  }
+
+  return truncated;
+}
+
 function closeSocket(socket: WebSocket, code: number, reason: string): void {
   if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
     return;
   }
 
-  socket.close(code, reason);
+  socket.close(code, truncateCloseReason(reason));
 }
 
 function buildSessionUpdate(config: RealtimeSessionConfig): Record<string, unknown> {
@@ -170,7 +196,7 @@ function buildSessionUpdate(config: RealtimeSessionConfig): Record<string, unkno
         },
         transcription: {
           model: DEFAULT_INPUT_TRANSCRIPTION_MODEL,
-          ...(language ? { language } : {}),
+          ...(language ? { language: toRealtimeLanguageCode(language) } : {}),
         },
         turn_detection: {
           type: 'server_vad',
