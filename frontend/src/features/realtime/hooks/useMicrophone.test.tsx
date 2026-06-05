@@ -5,7 +5,6 @@ import { useMicrophone } from "./useMicrophone.ts";
 
 interface FakeWorkletMessage {
   data: {
-    sampleRate: number;
     samples: Float32Array;
     type?: string;
   };
@@ -28,7 +27,6 @@ class FakeAudioWorkletPort {
   flush() {
     this.onmessage?.({
       data: {
-        sampleRate: 16_000,
         samples: this.flushSamples,
         type: "flushed",
       },
@@ -71,7 +69,7 @@ function TestHarness({
       <button
         type="button"
         onClick={() => {
-          void microphone.start({ onChunk, targetSampleRate });
+          microphone.start({ onChunk, targetSampleRate }).catch(() => {});
         }}
       >
         Start
@@ -106,11 +104,17 @@ describe("useMicrophone", () => {
   const addModule = vi.fn();
   const decodeAudioData = vi.fn();
   let sourceNode: FakeMediaStreamSourceNode;
+  let audioContextOptionsLog: Array<{ sampleRate?: number } | undefined>;
+  // When set, forces every context to report this rate regardless of request,
+  // simulating a browser that cannot honor the requested sample rate.
+  let forcedContextSampleRate: number | null;
 
   beforeEach(() => {
     FakeAudioWorkletNode.instance = null;
     FakeAudioWorkletNode.shouldThrow = false;
     sourceNode = new FakeMediaStreamSourceNode();
+    audioContextOptionsLog = [];
+    forcedContextSampleRate = null;
     addModule.mockResolvedValue(undefined);
 
     getUserMedia.mockResolvedValue({
@@ -120,11 +124,17 @@ describe("useMicrophone", () => {
     class FakeAudioContext {
       readonly audioWorklet = { addModule };
       readonly destination = {};
-      readonly sampleRate = 48_000;
+      readonly sampleRate: number;
       readonly state = "running";
       close = vi.fn();
       decodeAudioData = decodeAudioData;
       resume = vi.fn();
+
+      constructor(options?: { sampleRate?: number }) {
+        audioContextOptionsLog.push(options);
+        this.sampleRate =
+          forcedContextSampleRate ?? options?.sampleRate ?? 48_000;
+      }
 
       createMediaStreamSource() {
         return sourceNode;
@@ -162,7 +172,6 @@ describe("useMicrophone", () => {
     act(() => {
       FakeAudioWorkletNode.instance?.port.onmessage?.({
         data: {
-          sampleRate: 16_000,
           samples: new Float32Array([0, 0.5, -0.5]),
           type: "chunk",
         },
@@ -178,7 +187,7 @@ describe("useMicrophone", () => {
     expect(decodeAudioData).not.toHaveBeenCalled();
   });
 
-  it("resamples capture to a custom target sample rate when provided", async () => {
+  it("captures directly at the requested target sample rate without resampling", async () => {
     const user = userEvent.setup();
     const onChunk = vi.fn();
 
@@ -187,10 +196,12 @@ describe("useMicrophone", () => {
     await user.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(addModule).toHaveBeenCalled());
 
+    // The AudioContext is created at the target rate, so no resampling happens.
+    expect(audioContextOptionsLog).toContainEqual({ sampleRate: 24_000 });
+
     act(() => {
       FakeAudioWorkletNode.instance?.port.onmessage?.({
         data: {
-          sampleRate: 48_000,
           samples: new Float32Array([0, 0.1, 0.2, 0.3, 0.4, 0.5]),
           type: "chunk",
         },
@@ -199,45 +210,23 @@ describe("useMicrophone", () => {
 
     await waitFor(() => expect(onChunk).toHaveBeenCalledTimes(1));
 
-    // 48 kHz -> 24 kHz halves the samples: 6 floats -> 3 samples -> 6 bytes.
-    expect(onChunk.mock.calls[0]?.[0]).toHaveLength(6);
+    // Samples pass straight through: 6 floats -> 6 samples -> 12 bytes.
+    expect(onChunk.mock.calls[0]?.[0]).toHaveLength(12);
   });
 
-  it("upsamples without zero-stuffing when the source rate is below the target", async () => {
+  it("fails clearly when the browser cannot capture at the target rate", async () => {
     const user = userEvent.setup();
     const onChunk = vi.fn();
+    forcedContextSampleRate = 48_000;
 
     render(<TestHarness onChunk={onChunk} targetSampleRate={24_000} />);
 
     await user.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(addModule).toHaveBeenCalled());
 
-    act(() => {
-      FakeAudioWorkletNode.instance?.port.onmessage?.({
-        data: {
-          // Communications devices can run the AudioContext below 24 kHz.
-          sampleRate: 16_000,
-          samples: new Float32Array([0.1, 0.4, 0.7, 1]),
-          type: "chunk",
-        },
-      });
-    });
-
-    await waitFor(() => expect(onChunk).toHaveBeenCalledTimes(1));
-
-    const pcm = onChunk.mock.calls[0]?.[0] as Uint8Array;
-    // 16 kHz -> 24 kHz grows the samples by 1.5x: 4 -> 6 samples -> 12 bytes.
-    expect(pcm).toHaveLength(12);
-
-    // A monotonically increasing input must stay monotonic; the broken
-    // downsample-only path would inject zero samples and break this.
-    const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-    const samples = Array.from({ length: pcm.byteLength / 2 }, (_, index) =>
-      view.getInt16(index * 2, true),
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/24000 Hz/),
     );
-    for (let index = 1; index < samples.length; index += 1) {
-      expect(samples[index]).toBeGreaterThanOrEqual(samples[index - 1]);
-    }
+    expect(onChunk).not.toHaveBeenCalled();
   });
 
   it("flushes trailing worklet samples before stopping capture", async () => {

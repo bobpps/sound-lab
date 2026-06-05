@@ -21,7 +21,7 @@ class RealtimeMicrophoneProcessor extends AudioWorkletProcessor {
       : new Float32Array(0);
 
     this.port.postMessage(
-      { type: "flushed", sampleRate, samples },
+      { type: "flushed", samples },
       [samples.buffer],
     );
 
@@ -48,7 +48,7 @@ class RealtimeMicrophoneProcessor extends AudioWorkletProcessor {
       if (this.offset === this.buffer.length) {
         const samples = this.buffer;
         this.port.postMessage(
-          { type: "chunk", sampleRate, samples },
+          { type: "chunk", samples },
           [samples.buffer],
         );
         this.buffer = new Float32Array(4096);
@@ -90,76 +90,6 @@ function getAudioContextConstructor(): AudioContextConstructor | undefined {
   return window.AudioContext ?? (window as typeof window & {
     webkitAudioContext?: AudioContextConstructor;
   }).webkitAudioContext;
-}
-
-function downsampleBuffer(
-  input: Float32Array,
-  sampleRateRatio: number,
-  outputLength: number,
-): Float32Array {
-  const output = new Float32Array(outputLength);
-
-  let inputIndex = 0;
-  for (let outputIndex = 0; outputIndex < outputLength; outputIndex += 1) {
-    const nextInputIndex = Math.round((outputIndex + 1) * sampleRateRatio);
-    let sum = 0;
-    let count = 0;
-
-    for (
-      let sampleIndex = inputIndex;
-      sampleIndex < nextInputIndex && sampleIndex < input.length;
-      sampleIndex += 1
-    ) {
-      sum += input[sampleIndex];
-      count += 1;
-    }
-
-    output[outputIndex] = count > 0 ? sum / count : 0;
-    inputIndex = nextInputIndex;
-  }
-
-  return output;
-}
-
-function upsampleBuffer(
-  input: Float32Array,
-  sampleRateRatio: number,
-  outputLength: number,
-): Float32Array {
-  const output = new Float32Array(outputLength);
-
-  for (let outputIndex = 0; outputIndex < outputLength; outputIndex += 1) {
-    const sourcePosition = outputIndex * sampleRateRatio;
-    const lowerIndex = Math.floor(sourcePosition);
-    const upperIndex = Math.min(lowerIndex + 1, input.length - 1);
-    const fraction = sourcePosition - lowerIndex;
-
-    output[outputIndex] =
-      input[lowerIndex] + (input[upperIndex] - input[lowerIndex]) * fraction;
-  }
-
-  return output;
-}
-
-// Resamples mono float audio to the target rate. Downsampling averages source
-// windows (anti-aliasing); upsampling interpolates linearly. A plain
-// downsample-only path would zero-stuff when the source rate is below the
-// target, distorting the audio sent to providers like OpenAI (24 kHz).
-function resampleBuffer(
-  input: Float32Array,
-  sourceSampleRate: number,
-  targetSampleRate: number,
-): Float32Array {
-  if (sourceSampleRate === targetSampleRate || input.length === 0) {
-    return input;
-  }
-
-  const sampleRateRatio = sourceSampleRate / targetSampleRate;
-  const outputLength = Math.max(1, Math.round(input.length / sampleRateRatio));
-
-  return sourceSampleRate > targetSampleRate
-    ? downsampleBuffer(input, sampleRateRatio, outputLength)
-    : upsampleBuffer(input, sampleRateRatio, outputLength);
 }
 
 function floatToPcm16(input: Float32Array): Uint8Array {
@@ -290,8 +220,34 @@ export function useMicrophone(): UseMicrophoneResult {
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
+    // Capture directly at the target rate so no manual resampling is needed.
+    const existingContext = audioContextRef.current;
+    if (existingContext && existingContext.sampleRate !== targetSampleRate) {
+      await existingContext.close();
+      audioContextRef.current = null;
+    }
+
     if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContextCtor();
+      let context: AudioContext;
+      try {
+        context = new AudioContextCtor({ sampleRate: targetSampleRate });
+      } catch {
+        context = new AudioContextCtor();
+      }
+
+      if (context.sampleRate !== targetSampleRate) {
+        await context.close();
+        for (const track of stream.getTracks()) {
+          track.stop();
+        }
+
+        const message =
+          `This browser cannot capture microphone audio at ${targetSampleRate} Hz.`;
+        setError(message);
+        throw new Error(message);
+      }
+
+      audioContextRef.current = context;
     }
 
     if (audioContextRef.current.state === "suspended") {
@@ -350,7 +306,6 @@ export function useMicrophone(): UseMicrophoneResult {
     setIsRecording(true);
 
     workletNode.port.onmessage = (event: MessageEvent<{
-      sampleRate?: number;
       samples?: Float32Array;
       type?: string;
     }>) => {
@@ -362,12 +317,9 @@ export function useMicrophone(): UseMicrophoneResult {
         return;
       }
 
-      const resampled = resampleBuffer(
-        event.data.samples,
-        event.data.sampleRate ?? audioContext.sampleRate,
-        targetSampleRate,
-      );
-      const pcmChunk = floatToPcm16(resampled);
+      // The context already runs at the target rate, so the samples are sent
+      // straight through without resampling.
+      const pcmChunk = floatToPcm16(event.data.samples);
 
       pendingChunkSendsRef.current = pendingChunkSendsRef.current
         .catch(() => undefined)
