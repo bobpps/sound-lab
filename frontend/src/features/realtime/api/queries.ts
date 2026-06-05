@@ -9,6 +9,12 @@ export interface CreateAgentPromptInput {
   prompt: string;
 }
 
+export interface UpdateAgentPromptInput {
+  title?: string;
+  language?: string;
+  prompt?: string;
+}
+
 export const realtimeKeys = {
   all: ["realtime"] as const,
   agentPrompts: (providerId: string | null = null) =>
@@ -39,6 +45,39 @@ export function useCreateAgentPrompt() {
   return useMutation({
     mutationFn: (input: CreateAgentPromptInput) =>
       api.post<AgentPrompt>("/agent-prompts", input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [...realtimeKeys.all, "agent-prompts"],
+      });
+    },
+  });
+}
+
+export function useUpdateAgentPrompt() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      promptId,
+      data,
+    }: {
+      promptId: number;
+      data: UpdateAgentPromptInput;
+    }) => api.put<AgentPrompt>(`/agent-prompts/${promptId}`, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [...realtimeKeys.all, "agent-prompts"],
+      });
+    },
+  });
+}
+
+export function useDeleteAgentPrompt() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ promptId }: { promptId: number }) =>
+      api.delete(`/agent-prompts/${promptId}`),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: [...realtimeKeys.all, "agent-prompts"],

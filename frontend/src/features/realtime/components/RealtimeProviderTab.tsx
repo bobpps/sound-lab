@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import {
   useCreateAgentPrompt,
+  useDeleteAgentPrompt,
   useAgentPrompts,
   useRealtimeModels,
   useRealtimeVoices,
+  useUpdateAgentPrompt,
 } from "../api/queries.ts";
 import { useMicrophone } from "../hooks/useMicrophone.ts";
 import { useRealtimeSession } from "../hooks/useRealtimeSession.ts";
 import {
   SessionControls,
   type CreatePromptDraft,
+  type UpdatePromptDraft,
 } from "./SessionControls.tsx";
 import { TranscriptionPanel } from "./TranscriptionPanel.tsx";
 
@@ -31,6 +34,8 @@ export function RealtimeProviderTab({
   const [selectedModel, setSelectedModel] = useState("");
   const promptsQuery = useAgentPrompts(providerId);
   const createPrompt = useCreateAgentPrompt();
+  const updatePrompt = useUpdateAgentPrompt();
+  const deletePrompt = useDeleteAgentPrompt();
   const modelsQuery = useRealtimeModels(providerId);
   const models = modelsQuery.data ?? [];
   const resolvedModel =
@@ -57,6 +62,21 @@ export function RealtimeProviderTab({
       provider_id: providerId,
       title: draft.title,
     });
+  }
+
+  async function handleUpdatePrompt(promptId: number, draft: UpdatePromptDraft) {
+    return updatePrompt.mutateAsync({
+      promptId,
+      data: {
+        language: draft.language,
+        prompt: draft.prompt,
+        title: draft.title,
+      },
+    });
+  }
+
+  async function handleDeletePrompt(promptId: number) {
+    await deletePrompt.mutateAsync({ promptId });
   }
 
   async function handleStart(config: {
@@ -87,10 +107,17 @@ export function RealtimeProviderTab({
       <SessionControls
         error={microphoneError ?? session.error}
         isActive={session.isConnected}
-        isBusy={session.isConnecting || createPrompt.isPending}
+        isBusy={
+          session.isConnecting ||
+          createPrompt.isPending ||
+          updatePrompt.isPending ||
+          deletePrompt.isPending
+        }
         isCreatingPrompt={createPrompt.isPending}
+        isDeletingPrompt={deletePrompt.isPending}
         isModelsLoading={modelsQuery.isPending}
         isPromptsLoading={promptsQuery.isPending}
+        isUpdatingPrompt={updatePrompt.isPending}
         isVoicesLoading={voicesQuery.isPending}
         models={models}
         modelsError={
@@ -115,8 +142,10 @@ export function RealtimeProviderTab({
         }
         onModelChange={setSelectedModel}
         onCreatePrompt={handleCreatePrompt}
+        onDeletePrompt={handleDeletePrompt}
         onStart={handleStart}
         onStop={handleStop}
+        onUpdatePrompt={handleUpdatePrompt}
       />
 
       <TranscriptionPanel

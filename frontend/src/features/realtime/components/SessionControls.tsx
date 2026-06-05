@@ -8,13 +8,21 @@ export interface CreatePromptDraft {
   title: string;
 }
 
+export interface UpdatePromptDraft {
+  language: string;
+  prompt: string;
+  title: string;
+}
+
 interface SessionControlsProps {
   error: string | null;
   isActive: boolean;
   isBusy: boolean;
   isCreatingPrompt: boolean;
+  isDeletingPrompt: boolean;
   isModelsLoading: boolean;
   isPromptsLoading: boolean;
+  isUpdatingPrompt: boolean;
   isVoicesLoading: boolean;
   languageMode: "auto-only" | "configurable";
   models: string[];
@@ -26,9 +34,14 @@ interface SessionControlsProps {
   voices: Voice[];
   voicesError: string | null;
   onCreatePrompt: (draft: CreatePromptDraft) => Promise<AgentPrompt>;
+  onDeletePrompt: (promptId: number) => Promise<void>;
   onModelChange: (model: string) => void;
   onStart: (config: RealtimeConnectConfig) => Promise<void>;
   onStop: () => Promise<void> | void;
+  onUpdatePrompt: (
+    promptId: number,
+    draft: UpdatePromptDraft,
+  ) => Promise<AgentPrompt>;
 }
 
 function formatModelName(model: string): string {
@@ -48,8 +61,10 @@ export function SessionControls({
   isActive,
   isBusy,
   isCreatingPrompt,
+  isDeletingPrompt,
   isModelsLoading,
   isPromptsLoading,
+  isUpdatingPrompt,
   isVoicesLoading,
   languageMode,
   models,
@@ -61,18 +76,25 @@ export function SessionControls({
   voices,
   voicesError,
   onCreatePrompt,
+  onDeletePrompt,
   onModelChange,
   onStart,
   onStop,
+  onUpdatePrompt,
 }: SessionControlsProps) {
   const [createError, setCreateError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingPromptId, setEditingPromptId] = useState<number | null>(null);
   const [selectedPromptId, setSelectedPromptId] = useState("");
   const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [newPromptTitle, setNewPromptTitle] = useState("");
   const [newPromptLanguage, setNewPromptLanguage] = useState("en-US");
   const [newPromptBody, setNewPromptBody] = useState("");
+  const [editPromptTitle, setEditPromptTitle] = useState("");
+  const [editPromptLanguage, setEditPromptLanguage] = useState("");
+  const [editPromptBody, setEditPromptBody] = useState("");
   const resolvedModel =
     models.find((model) => model === selectedModel) ?? models[0] ?? "";
   const resolvedPromptId =
@@ -92,6 +114,8 @@ export function SessionControls({
     voices.find((voice) => voice.id === selectedVoiceId)?.id ??
     voices[0]?.id ??
     "";
+  const isEditingSelectedPrompt =
+    selectedPrompt !== null && editingPromptId === selectedPrompt.id;
 
   async function handleStart() {
     setFormError(null);
@@ -152,6 +176,73 @@ export function SessionControls({
     } catch (createPromptError) {
       setCreateError(
         getErrorMessage(createPromptError, "Unable to create the prompt."),
+      );
+    }
+  }
+
+  function handleOpenEditPrompt(prompt: AgentPrompt) {
+    setCreateError(null);
+    setEditError(null);
+    setIsCreateOpen(false);
+    setEditingPromptId(prompt.id);
+    setEditPromptTitle(prompt.title);
+    setEditPromptLanguage(prompt.language);
+    setEditPromptBody(prompt.prompt);
+  }
+
+  async function handleUpdatePrompt() {
+    setEditError(null);
+
+    if (!selectedPrompt || editingPromptId !== selectedPrompt.id) {
+      setEditError("Select a prompt before editing.");
+      return;
+    }
+
+    const title = editPromptTitle.trim();
+    const language = editPromptLanguage.trim();
+    const prompt = editPromptBody.trim();
+
+    if (!title) {
+      setEditError("Prompt title is required.");
+      return;
+    }
+
+    if (!prompt) {
+      setEditError("Prompt body is required.");
+      return;
+    }
+
+    try {
+      const updatedPrompt = await onUpdatePrompt(selectedPrompt.id, {
+        language,
+        prompt,
+        title,
+      });
+
+      setSelectedPromptId(String(updatedPrompt.id));
+      setEditingPromptId(null);
+    } catch (updatePromptError) {
+      setEditError(
+        getErrorMessage(updatePromptError, "Unable to update the prompt."),
+      );
+    }
+  }
+
+  async function handleDeletePrompt(prompt: AgentPrompt) {
+    setEditError(null);
+
+    if (!window.confirm("Delete this prompt?")) {
+      return;
+    }
+
+    try {
+      await onDeletePrompt(prompt.id);
+      setSelectedPromptId("");
+      setEditingPromptId(null);
+      setIsCreateOpen(false);
+    } catch (deletePromptError) {
+      setEditError(
+        getErrorMessage(deletePromptError, "Unable to delete the prompt."),
       );
     }
   }
@@ -295,6 +386,8 @@ export function SessionControls({
             value={resolvedPromptId}
             onChange={(event) => {
               setFormError(null);
+              setEditError(null);
+              setEditingPromptId(null);
               setSelectedPromptId(event.target.value);
             }}
             disabled={isActive || isBusy || isPromptsLoading || prompts.length === 0}
@@ -314,7 +407,75 @@ export function SessionControls({
         </label>
       </div>
 
-      {selectedPrompt ? (
+      {selectedPrompt && isEditingSelectedPrompt ? (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
+            <label className="flex flex-col gap-1 text-sm text-gray-600">
+              Prompt title
+              <input
+                type="text"
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                value={editPromptTitle}
+                onChange={(event) => setEditPromptTitle(event.target.value)}
+                disabled={isUpdatingPrompt || isDeletingPrompt || isActive}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1 text-sm text-gray-600">
+              Language
+              <input
+                type="text"
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                value={editPromptLanguage}
+                onChange={(event) => setEditPromptLanguage(event.target.value)}
+                placeholder="Leave empty to auto-detect"
+                disabled={isUpdatingPrompt || isDeletingPrompt || isActive}
+              />
+            </label>
+          </div>
+
+          <label className="mt-4 flex flex-col gap-1 text-sm text-gray-600">
+            Prompt body
+            <textarea
+              className="min-h-32 rounded-xl border border-gray-300 bg-white px-3 py-2 font-mono text-sm text-gray-900"
+              value={editPromptBody}
+              onChange={(event) => setEditPromptBody(event.target.value)}
+              disabled={isUpdatingPrompt || isDeletingPrompt || isActive}
+            />
+          </label>
+
+          {editError ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {editError}
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                void handleUpdatePrompt();
+              }}
+              disabled={isUpdatingPrompt || isDeletingPrompt || isActive}
+            >
+              {isUpdatingPrompt ? "Saving..." : "Save Changes"}
+            </button>
+
+            <button
+              type="button"
+              className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                setEditError(null);
+                setEditingPromptId(null);
+              }}
+              disabled={isUpdatingPrompt || isDeletingPrompt}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : selectedPrompt ? (
         <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -326,22 +487,52 @@ export function SessionControls({
               </p>
             </div>
 
-            <button
-              type="button"
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-white"
-              onClick={() => {
-                setCreateError(null);
-                setIsCreateOpen((current) => !current);
-              }}
-              disabled={isActive || isBusy}
-            >
-              {isCreateOpen ? "Hide Create Form" : "Create Prompt"}
-            </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-white"
+                onClick={() => handleOpenEditPrompt(selectedPrompt)}
+                disabled={isActive || isBusy}
+              >
+                Edit Prompt
+              </button>
+
+              <button
+                type="button"
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                onClick={() => {
+                  void handleDeletePrompt(selectedPrompt);
+                }}
+                disabled={isActive || isBusy}
+              >
+                {isDeletingPrompt ? "Deleting..." : "Delete Prompt"}
+              </button>
+
+              <button
+                type="button"
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-white"
+                onClick={() => {
+                  setCreateError(null);
+                  setEditError(null);
+                  setEditingPromptId(null);
+                  setIsCreateOpen((current) => !current);
+                }}
+                disabled={isActive || isBusy}
+              >
+                {isCreateOpen ? "Hide Create Form" : "Create Prompt"}
+              </button>
+            </div>
           </div>
 
           <p className="mt-3 whitespace-pre-wrap text-sm text-gray-700">
             {selectedPrompt.prompt}
           </p>
+
+          {editError ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {editError}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
