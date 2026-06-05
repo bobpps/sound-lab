@@ -102,6 +102,17 @@ describe('Agent prompt routes', () => {
       expect(body.created_at).toBeDefined();
     });
 
+    it('creates a prompt with an empty language for auto-detection', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/agent-prompts',
+        payload: { ...SEED_PROMPT, language: '' },
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect(res.json().language).toBe('');
+    });
+
     it('returns 400 when required fields are missing', async () => {
       const res = await app.inject({
         method: 'POST',
