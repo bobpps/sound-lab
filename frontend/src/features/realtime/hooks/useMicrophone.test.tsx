@@ -203,6 +203,43 @@ describe("useMicrophone", () => {
     expect(onChunk.mock.calls[0]?.[0]).toHaveLength(6);
   });
 
+  it("upsamples without zero-stuffing when the source rate is below the target", async () => {
+    const user = userEvent.setup();
+    const onChunk = vi.fn();
+
+    render(<TestHarness onChunk={onChunk} targetSampleRate={24_000} />);
+
+    await user.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(addModule).toHaveBeenCalled());
+
+    act(() => {
+      FakeAudioWorkletNode.instance?.port.onmessage?.({
+        data: {
+          // Communications devices can run the AudioContext below 24 kHz.
+          sampleRate: 16_000,
+          samples: new Float32Array([0.1, 0.4, 0.7, 1]),
+          type: "chunk",
+        },
+      });
+    });
+
+    await waitFor(() => expect(onChunk).toHaveBeenCalledTimes(1));
+
+    const pcm = onChunk.mock.calls[0]?.[0] as Uint8Array;
+    // 16 kHz -> 24 kHz grows the samples by 1.5x: 4 -> 6 samples -> 12 bytes.
+    expect(pcm).toHaveLength(12);
+
+    // A monotonically increasing input must stay monotonic; the broken
+    // downsample-only path would inject zero samples and break this.
+    const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+    const samples = Array.from({ length: pcm.byteLength / 2 }, (_, index) =>
+      view.getInt16(index * 2, true),
+    );
+    for (let index = 1; index < samples.length; index += 1) {
+      expect(samples[index]).toBeGreaterThanOrEqual(samples[index - 1]);
+    }
+  });
+
   it("flushes trailing worklet samples before stopping capture", async () => {
     const user = userEvent.setup();
     const onChunk =

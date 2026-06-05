@@ -94,15 +94,9 @@ function getAudioContextConstructor(): AudioContextConstructor | undefined {
 
 function downsampleBuffer(
   input: Float32Array,
-  sourceSampleRate: number,
-  targetSampleRate: number,
+  sampleRateRatio: number,
+  outputLength: number,
 ): Float32Array {
-  if (sourceSampleRate === targetSampleRate) {
-    return input;
-  }
-
-  const sampleRateRatio = sourceSampleRate / targetSampleRate;
-  const outputLength = Math.round(input.length / sampleRateRatio);
   const output = new Float32Array(outputLength);
 
   let inputIndex = 0;
@@ -125,6 +119,47 @@ function downsampleBuffer(
   }
 
   return output;
+}
+
+function upsampleBuffer(
+  input: Float32Array,
+  sampleRateRatio: number,
+  outputLength: number,
+): Float32Array {
+  const output = new Float32Array(outputLength);
+
+  for (let outputIndex = 0; outputIndex < outputLength; outputIndex += 1) {
+    const sourcePosition = outputIndex * sampleRateRatio;
+    const lowerIndex = Math.floor(sourcePosition);
+    const upperIndex = Math.min(lowerIndex + 1, input.length - 1);
+    const fraction = sourcePosition - lowerIndex;
+
+    output[outputIndex] =
+      input[lowerIndex] + (input[upperIndex] - input[lowerIndex]) * fraction;
+  }
+
+  return output;
+}
+
+// Resamples mono float audio to the target rate. Downsampling averages source
+// windows (anti-aliasing); upsampling interpolates linearly. A plain
+// downsample-only path would zero-stuff when the source rate is below the
+// target, distorting the audio sent to providers like OpenAI (24 kHz).
+function resampleBuffer(
+  input: Float32Array,
+  sourceSampleRate: number,
+  targetSampleRate: number,
+): Float32Array {
+  if (sourceSampleRate === targetSampleRate || input.length === 0) {
+    return input;
+  }
+
+  const sampleRateRatio = sourceSampleRate / targetSampleRate;
+  const outputLength = Math.max(1, Math.round(input.length / sampleRateRatio));
+
+  return sourceSampleRate > targetSampleRate
+    ? downsampleBuffer(input, sampleRateRatio, outputLength)
+    : upsampleBuffer(input, sampleRateRatio, outputLength);
 }
 
 function floatToPcm16(input: Float32Array): Uint8Array {
@@ -327,7 +362,7 @@ export function useMicrophone(): UseMicrophoneResult {
         return;
       }
 
-      const resampled = downsampleBuffer(
+      const resampled = resampleBuffer(
         event.data.samples,
         event.data.sampleRate ?? audioContext.sampleRate,
         targetSampleRate,
