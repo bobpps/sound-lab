@@ -57,7 +57,13 @@ class FakeMediaStreamSourceNode {
   disconnect = vi.fn();
 }
 
-function TestHarness({ onChunk }: { onChunk: (chunk: Uint8Array) => void }) {
+function TestHarness({
+  onChunk,
+  targetSampleRate,
+}: {
+  onChunk: (chunk: Uint8Array) => void;
+  targetSampleRate?: number;
+}) {
   const microphone = useMicrophone();
 
   return (
@@ -65,7 +71,7 @@ function TestHarness({ onChunk }: { onChunk: (chunk: Uint8Array) => void }) {
       <button
         type="button"
         onClick={() => {
-          void microphone.start({ onChunk });
+          void microphone.start({ onChunk, targetSampleRate });
         }}
       >
         Start
@@ -170,6 +176,31 @@ describe("useMicrophone", () => {
     expect(screen.getByTestId("chunk-count")).toHaveTextContent("1");
     expect(sourceNode.connect).toHaveBeenCalledWith(FakeAudioWorkletNode.instance);
     expect(decodeAudioData).not.toHaveBeenCalled();
+  });
+
+  it("resamples capture to a custom target sample rate when provided", async () => {
+    const user = userEvent.setup();
+    const onChunk = vi.fn();
+
+    render(<TestHarness onChunk={onChunk} targetSampleRate={24_000} />);
+
+    await user.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(addModule).toHaveBeenCalled());
+
+    act(() => {
+      FakeAudioWorkletNode.instance?.port.onmessage?.({
+        data: {
+          sampleRate: 48_000,
+          samples: new Float32Array([0, 0.1, 0.2, 0.3, 0.4, 0.5]),
+          type: "chunk",
+        },
+      });
+    });
+
+    await waitFor(() => expect(onChunk).toHaveBeenCalledTimes(1));
+
+    // 48 kHz -> 24 kHz halves the samples: 6 floats -> 3 samples -> 6 bytes.
+    expect(onChunk.mock.calls[0]?.[0]).toHaveLength(6);
   });
 
   it("flushes trailing worklet samples before stopping capture", async () => {

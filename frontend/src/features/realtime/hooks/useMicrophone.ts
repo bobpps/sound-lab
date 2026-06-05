@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const TARGET_SAMPLE_RATE = 16_000;
+const DEFAULT_TARGET_SAMPLE_RATE = 16_000;
 const MICROPHONE_WORKLET_NAME = "realtime-microphone-processor";
 const MICROPHONE_WORKLET_SOURCE = `
 class RealtimeMicrophoneProcessor extends AudioWorkletProcessor {
@@ -67,6 +67,9 @@ const loadedAudioWorklets = new WeakSet<AudioContext>();
 
 export interface UseMicrophoneStartOptions {
   onChunk?: (chunk: Uint8Array) => void | Promise<void>;
+  // PCM rate the captured audio is resampled to before being sent to the
+  // realtime provider. Defaults to 16 kHz; OpenAI Realtime requires 24 kHz.
+  targetSampleRate?: number;
 }
 
 interface UseMicrophoneResult {
@@ -233,6 +236,7 @@ export function useMicrophone(): UseMicrophoneResult {
   }, []);
 
   const start = useCallback(async (options: UseMicrophoneStartOptions = {}) => {
+    const targetSampleRate = options.targetSampleRate ?? DEFAULT_TARGET_SAMPLE_RATE;
     if (
       typeof navigator === "undefined" ||
       !navigator.mediaDevices?.getUserMedia
@@ -326,7 +330,7 @@ export function useMicrophone(): UseMicrophoneResult {
       const resampled = downsampleBuffer(
         event.data.samples,
         event.data.sampleRate ?? audioContext.sampleRate,
-        TARGET_SAMPLE_RATE,
+        targetSampleRate,
       );
       const pcmChunk = floatToPcm16(resampled);
 

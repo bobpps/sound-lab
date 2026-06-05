@@ -14,6 +14,9 @@ import {
 import { TranscriptionPanel } from "./TranscriptionPanel.tsx";
 
 interface RealtimeProviderTabProps {
+  // PCM rate the microphone capture is resampled to before streaming. OpenAI
+  // Realtime requires 24 kHz; other providers accept the 16 kHz default.
+  inputSampleRate?: number;
   languageMode?: "auto-only" | "configurable";
   providerId: string;
   providerLabel: string;
@@ -24,6 +27,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function RealtimeProviderTab({
+  inputSampleRate,
   languageMode = "configurable",
   providerId,
   providerLabel,
@@ -70,6 +74,7 @@ export function RealtimeProviderTab({
     try {
       await startMicrophone({
         onChunk: session.sendAudio,
+        targetSampleRate: inputSampleRate,
       });
     } catch (error) {
       await session.disconnect();

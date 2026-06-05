@@ -193,14 +193,14 @@ describe('OpenAIRealtimeProvider', () => {
           input: {
             format: {
               type: 'audio/pcm',
-              rate: 16000,
+              rate: 24000,
             },
             noise_reduction: {
               type: 'near_field',
             },
             transcription: {
               model: 'gpt-4o-mini-transcribe',
-              language: 'en-US',
+              language: 'en',
             },
             turn_detection: {
               type: 'server_vad',
