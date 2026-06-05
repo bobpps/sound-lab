@@ -147,6 +147,44 @@ describe("RealtimePage", () => {
         return jsonResponse(nextPrompt, 201);
       }
 
+      const promptMatch = url.match(/\/agent-prompts\/(\d+)$/);
+      if (promptMatch && method === "PUT") {
+        const promptId = Number(promptMatch[1]);
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          language?: string;
+          prompt?: string;
+          title?: string;
+        };
+
+        for (const [providerId, prompts] of Object.entries(promptsByProvider)) {
+          const promptIndex = prompts.findIndex((prompt) => prompt.id === promptId);
+
+          if (promptIndex >= 0) {
+            const updatedPrompt = {
+              ...prompts[promptIndex],
+              ...body,
+            };
+            promptsByProvider[providerId] = prompts.map((prompt) =>
+              prompt.id === promptId ? updatedPrompt : prompt,
+            );
+            return jsonResponse(updatedPrompt);
+          }
+        }
+      }
+
+      if (promptMatch && method === "DELETE") {
+        const promptId = Number(promptMatch[1]);
+
+        for (const [providerId, prompts] of Object.entries(promptsByProvider)) {
+          if (prompts.some((prompt) => prompt.id === promptId)) {
+            promptsByProvider[providerId] = prompts.filter(
+              (prompt) => prompt.id !== promptId,
+            );
+            return new Response(null, { status: 204 });
+          }
+        }
+      }
+
       return jsonResponse(
         {
           statusCode: 404,
@@ -235,6 +273,52 @@ describe("RealtimePage", () => {
     await user.click(screen.getByRole("button", { name: "Save Prompt" }));
 
     expect((await screen.findAllByText("Sales rep")).length).toBeGreaterThan(0);
+  });
+
+  it("edits the selected agent prompt inline", async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByText("OpenAI Session");
+    await screen.findAllByText("OpenAI support agent");
+    await user.click(screen.getByRole("button", { name: "Edit Prompt" }));
+    await user.clear(screen.getByLabelText("Prompt title"));
+    await user.type(screen.getByLabelText("Prompt title"), "OpenAI triage agent");
+    await user.clear(screen.getByLabelText("Prompt body"));
+    await user.type(
+      screen.getByLabelText("Prompt body"),
+      "Ask one concise clarifying question before giving troubleshooting steps.",
+    );
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    expect(
+      (await screen.findAllByText("OpenAI triage agent")).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        "Ask one concise clarifying question before giving troubleshooting steps.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("deletes the selected agent prompt inline", async () => {
+    const user = userEvent.setup();
+
+    vi.stubGlobal("confirm", vi.fn(() => true));
+
+    renderPage();
+
+    await screen.findByText("OpenAI Session");
+    await screen.findAllByText("OpenAI support agent");
+    await user.click(screen.getByRole("button", { name: "Delete Prompt" }));
+
+    expect(
+      await screen.findByText(
+        "Create the first prompt for this provider to unlock live sessions.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("OpenAI support agent")).not.toBeInTheDocument();
   });
 
   it("creates a prompt without a language and shows auto-detection", async () => {
