@@ -34,12 +34,14 @@ export function VoiceMatcherPage() {
       ? selectedVoice.gender
       : null;
 
-  const { locales, candidates } = useStandardCandidates(
-    locale,
-    referenceGender,
-  );
+  const {
+    locales,
+    candidates,
+    isLoading: localesLoading,
+    isError: localesError,
+  } = useStandardCandidates(locale, referenceGender);
 
-  const { results, start, reset } = useBatchSynthesis(CONCURRENCY);
+  const { results, isRunning, start, reset } = useBatchSynthesis(CONCURRENCY);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -54,6 +56,9 @@ export function VoiceMatcherPage() {
     if (!audioRef.current) {
       audioRef.current = new Audio();
     }
+    // Clear any chaining handler left over from a previous "play all" so a
+    // single-card play does NOT resume the sequence.
+    audioRef.current.onended = null;
     audioRef.current.src = url;
     void audioRef.current.play();
   }
@@ -100,7 +105,10 @@ export function VoiceMatcherPage() {
   }
 
   const canSubmit =
-    voiceId !== null && locale !== null && text.trim() !== "";
+    voiceId !== null &&
+    locale !== null &&
+    text.trim() !== "" &&
+    !isRunning;
 
   useEffect(() => {
     return () => {
@@ -125,7 +133,13 @@ export function VoiceMatcherPage() {
           }}
           onVoiceChange={setVoiceId}
         />
-        <LocaleSelector locales={locales} value={locale} onChange={setLocale} />
+        <LocaleSelector
+          locales={locales}
+          value={locale}
+          onChange={setLocale}
+          isLoading={localesLoading}
+          isError={localesError}
+        />
         <TextInput value={text} onChange={setText} />
 
         <button

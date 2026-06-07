@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../../lib/api-client.ts";
 import { synthesizeCandidate, synthesizeReference } from "./synthesize.ts";
 
 describe("voice-matcher synthesize", () => {
@@ -44,7 +45,7 @@ describe("voice-matcher synthesize", () => {
     });
   });
 
-  it("throws the server message on a non-ok response", async () => {
+  it("throws an ApiError preserving status and server message on a non-ok response", async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ message: "boom" }), {
         status: 500,
@@ -52,8 +53,14 @@ describe("voice-matcher synthesize", () => {
       }),
     );
     const controller = new AbortController();
-    await expect(
-      synthesizeCandidate("en-US-Standard-A", "hi", controller.signal),
-    ).rejects.toThrow("boom");
+    const err = await synthesizeCandidate(
+      "en-US-Standard-A",
+      "hi",
+      controller.signal,
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(500);
+    expect((err as ApiError).message).toBe("boom");
   });
 });

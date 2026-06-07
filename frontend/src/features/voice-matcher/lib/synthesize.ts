@@ -1,4 +1,4 @@
-import { api } from "../../../lib/api-client.ts";
+import { ApiError, api } from "../../../lib/api-client.ts";
 import {
   CANDIDATE_PROVIDER_ID,
   REFERENCE_PROVIDER_ID,
@@ -24,7 +24,7 @@ async function postSynthesize(
     } catch {
       // non-JSON error body — keep statusText
     }
-    throw new Error(message);
+    throw new ApiError(response.status, message);
   }
 
   return response.blob();
