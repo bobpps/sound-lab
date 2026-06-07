@@ -45,12 +45,15 @@ export function VoiceMatcherPage() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Reset the batch whenever any synthesis input changes.
-  useEffect(() => {
+  // Reset the batch whenever the user changes a synthesis input. This is done
+  // synchronously in the change handlers (not via an effect on the inputs):
+  // a deferred reset effect would abort the batch that handleSubmit just
+  // started, leaving every card stuck on "Synthesizing…" (the reset would run
+  // after start() in the same render commit).
+  function resetOutput() {
     reset();
     setSubmitted(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, voiceId, locale, text]);
+  }
 
   function play(url: string) {
     if (!audioRef.current) {
@@ -130,17 +133,30 @@ export function VoiceMatcherPage() {
           onModelChange={(m) => {
             setModel(m);
             setVoiceId(null);
+            resetOutput();
           }}
-          onVoiceChange={setVoiceId}
+          onVoiceChange={(v) => {
+            setVoiceId(v);
+            resetOutput();
+          }}
         />
         <LocaleSelector
           locales={locales}
           value={locale}
-          onChange={setLocale}
+          onChange={(l) => {
+            setLocale(l);
+            resetOutput();
+          }}
           isLoading={localesLoading}
           isError={localesError}
         />
-        <TextInput value={text} onChange={setText} />
+        <TextInput
+          value={text}
+          onChange={(t) => {
+            setText(t);
+            resetOutput();
+          }}
+        />
 
         <button
           type="button"

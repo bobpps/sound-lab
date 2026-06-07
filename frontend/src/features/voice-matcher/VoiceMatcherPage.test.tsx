@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -145,6 +146,47 @@ describe("VoiceMatcherPage", () => {
     const playCallsBefore = audio.play.mock.calls.length;
     audio.triggerEnded();
     expect(audio.play.mock.calls.length).toBe(playCallsBefore);
+  });
+
+  it("completes synthesis under StrictMode (results become playable, not stuck)", async () => {
+    const user = userEvent.setup();
+    render(
+      <StrictMode>
+        <VoiceMatcherPage />
+      </StrictMode>,
+      { wrapper: createTestWrapper() },
+    );
+
+    await screen.findByRole("option", { name: "Kore" });
+    await user.selectOptions(screen.getByLabelText("Reference voice"), "Kore");
+    await user.selectOptions(screen.getByLabelText("Standard locale"), "en-US");
+    await user.type(screen.getByLabelText("Phrase"), "hello");
+    await user.click(
+      screen.getByRole("button", { name: /synthesize and compare/i }),
+    );
+
+    // The candidate card renders…
+    await screen.findByText("en-US-Standard-C");
+
+    // …and synthesis must actually finish: the per-card Play buttons become
+    // enabled (status "done") rather than staying stuck on "Synthesizing…".
+    // Regression: a reset-on-input effect used to abort the freshly started
+    // batch under StrictMode's deferred/double-invoked passive effects.
+    await waitFor(() => {
+      const playButtons = screen.getAllByRole("button", { name: /^play$/i });
+      expect(playButtons.length).toBeGreaterThan(0);
+      for (const btn of playButtons) {
+        expect(btn).toBeEnabled();
+      }
+    });
+    expect(screen.queryByText("Synthesizing…")).not.toBeInTheDocument();
+
+    // The synth button is usable again once the batch settled.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /synthesize and compare/i }),
+      ).toBeEnabled(),
+    );
   });
 
   it("disables the synth button while a batch is running", async () => {
