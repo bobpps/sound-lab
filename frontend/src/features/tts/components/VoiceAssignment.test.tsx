@@ -43,6 +43,9 @@ describe("VoiceAssignment", () => {
     const select1 = screen.getByLabelText("Character 1 voice");
     await user.selectOptions(select1, "voice-1");
 
+    expect(screen.getAllByRole("option", { name: "Alice (female)" })).toHaveLength(2);
+    expect(screen.getAllByRole("option", { name: "Bob (male)" })).toHaveLength(2);
+    expect(screen.getAllByRole("option", { name: "Charlie" })).toHaveLength(2);
     expect(onChange).toHaveBeenCalledWith({ 1: "voice-1" });
   });
 

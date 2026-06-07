@@ -2,6 +2,7 @@ import type { IRealtimeProvider } from './types.js';
 import { InworldRealtimeProvider } from './inworld.js';
 import { ElevenLabsRealtimeProvider } from './elevenlabs.js';
 import { GeminiRealtimeProvider } from './gemini.js';
+import { GeminiSdkRealtimeProvider } from './gemini-sdk.js';
 import { OpenAIRealtimeProvider } from './openai.js';
 
 export type RealtimeProviderConstructor = new (apiKey: string) => IRealtimeProvider;
@@ -33,4 +34,5 @@ export function getSupportedRealtimeProviders(): string[] {
 
 registerRealtimeProvider('elevenlabs-realtime', ElevenLabsRealtimeProvider);
 registerRealtimeProvider('gemini-realtime', GeminiRealtimeProvider);
+registerRealtimeProvider('gemini-realtime-sdk', GeminiSdkRealtimeProvider);
 registerRealtimeProvider('inworld-realtime', InworldRealtimeProvider);

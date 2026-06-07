@@ -58,6 +58,15 @@ const realtimePromptsResponse = [
     created_by: null,
     created_at: "2026-04-06T19:00:00.000Z",
   },
+  {
+    id: 12,
+    title: "Gemini assistant",
+    provider_id: "gemini-realtime",
+    language: "",
+    prompt: "Act as a concise Gemini assistant during live calls.",
+    created_by: null,
+    created_at: "2026-04-06T19:05:00.000Z",
+  },
 ];
 
 function jsonResponse(body: unknown, status = 200) {
@@ -143,6 +152,46 @@ beforeEach(() => {
         return jsonResponse(["gpt-realtime-mini"]);
       }
 
+      if (url.endsWith("/api/realtime/gemini-realtime/models")) {
+        return jsonResponse([
+          "gemini-2.5-flash-native-audio-latest",
+          "gemini-3.1-flash-live-preview",
+        ]);
+      }
+
+      if (url.endsWith("/api/realtime/gemini-realtime-sdk/models")) {
+        return jsonResponse([
+          "gemini-2.5-flash-native-audio-latest",
+          "gemini-3.1-flash-live-preview",
+        ]);
+      }
+
+      if (url.includes("/api/realtime/gemini-realtime/voices")) {
+        return jsonResponse([
+          {
+            id: "Zephyr",
+            name: "Zephyr",
+            language: "multi",
+            providerMeta: {
+              supportedModels: ["gemini-2.5-flash-native-audio-latest"],
+            },
+          },
+        ]);
+      }
+
+      if (url.includes("/api/realtime/gemini-realtime-sdk/voices")) {
+        return jsonResponse([
+          {
+            id: "Zephyr",
+            name: "Zephyr",
+            language: "multi",
+            providerMeta: {
+              supportedModels: ["gemini-2.5-flash-native-audio-latest"],
+            },
+          },
+        ]);
+      }
+
       return jsonResponse(
         {
           statusCode: 404,
@@ -209,6 +258,24 @@ describe("Router", () => {
       ).toBeInTheDocument();
     });
 
+    it("renders Realtime Gemini page at /realtime-gemini", async () => {
+      renderWithRouter(["/realtime-gemini"]);
+      expect(
+        screen.getByRole("heading", { name: "Realtime Gemini" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", { name: "Final phrases only" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", { name: "Spoken response only" }),
+      ).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: "Model Settings" }))
+        .toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "thinkingConfig.thinkingBudget" }),
+      ).toBeInTheDocument();
+    });
+
     it("renders Providers page at /providers", () => {
       renderWithRouter(["/providers"]);
       expect(
@@ -218,12 +285,12 @@ describe("Router", () => {
   });
 
   describe("Sidebar", () => {
-    it("renders all 4 navigation links", () => {
+    it("renders all 5 navigation links", () => {
       renderWithRouter(["/datasets"]);
       const nav = screen.getByRole("navigation");
       const links = within(nav).getAllByRole("link");
 
-      expect(links).toHaveLength(4);
+      expect(links).toHaveLength(5);
       expect(nav).toContainElement(links[0]);
     });
 
@@ -232,6 +299,7 @@ describe("Router", () => {
       expect(screen.getByRole("link", { name: "Datasets" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "TTS Testing" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Realtime" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Realtime Gemini" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Providers" })).toBeInTheDocument();
     });
 

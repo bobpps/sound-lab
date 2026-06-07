@@ -335,7 +335,6 @@ export function SessionControls({
             value={resolvedModel}
             onChange={(event) => {
               setFormError(null);
-              setSelectedVoiceId("");
               onModelChange(event.target.value);
             }}
             disabled={isActive || isBusy || isModelsLoading || models.length === 0}

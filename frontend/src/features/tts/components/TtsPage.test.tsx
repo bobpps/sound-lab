@@ -367,6 +367,82 @@ describe("TtsPage", () => {
     expect(screen.getByLabelText("Character 2 voice")).toBeInTheDocument();
   });
 
+  it("preserves selected voices across model changes when the voice still exists", async () => {
+    const user = userEvent.setup();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = extractUrl(input);
+
+        if (url.endsWith("/api/providers?type=tts")) {
+          return jsonResponse(providers);
+        }
+
+        if (url.endsWith("/api/dialogs") && !url.includes("/1")) {
+          return jsonResponse(dialogs);
+        }
+
+        if (url.endsWith("/api/dialogs/1/annotations")) {
+          return jsonResponse(annotations);
+        }
+
+        if (url.endsWith("/api/dialogs/1") && !url.includes("annotations")) {
+          return jsonResponse(dialogWithMessages);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/models")) {
+          return jsonResponse(["model-a", "model-b", "model-c"]);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/voices?model=model-a")) {
+          return jsonResponse(voices);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/voices?model=model-b")) {
+          return jsonResponse([
+            voices[0],
+            { id: "voice-3", name: "Charlie", language: "en-US" },
+          ]);
+        }
+
+        if (url.endsWith("/api/tts/elevenlabs/voices?model=model-c")) {
+          return jsonResponse([
+            { id: "voice-4", name: "Dana", language: "en-US" },
+          ]);
+        }
+
+        return jsonResponse({ message: "Not Found" }, 404);
+      }),
+    );
+
+    renderWithProviders(<TtsPage />);
+
+    await user.selectOptions(
+      await screen.findByRole("combobox", { name: "TTS Provider" }),
+      "elevenlabs",
+    );
+    await user.selectOptions(
+      await screen.findByRole("combobox", { name: "Dialog" }),
+      "1",
+    );
+
+    const modelSelect = await screen.findByRole("combobox", {
+      name: "TTS Model",
+    });
+    await user.selectOptions(modelSelect, "model-a");
+
+    const characterVoiceSelect = await screen.findByLabelText("Character 1 voice");
+    await user.selectOptions(characterVoiceSelect, "voice-1");
+    expect(characterVoiceSelect).toHaveValue("voice-1");
+
+    await user.selectOptions(modelSelect, "model-b");
+    expect(await screen.findByLabelText("Character 1 voice")).toHaveValue("voice-1");
+
+    await user.selectOptions(modelSelect, "model-c");
+    expect(await screen.findByLabelText("Character 1 voice")).toHaveValue("");
+  });
+
   it("shows dialog lines and Run button with clean (no annotation) selection", async () => {
     const user = userEvent.setup();
 

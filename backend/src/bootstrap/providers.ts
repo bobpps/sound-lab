@@ -18,6 +18,7 @@ export const DEFAULT_PROVIDER_SEEDS: ProviderSeed[] = [
   // Provider IDs are globally unique across all types.
   { id: 'openai-realtime', name: 'OpenAI Realtime', type: 'realtime' },
   { id: 'gemini-realtime', name: 'Gemini Realtime', type: 'realtime' },
+  { id: 'gemini-realtime-sdk', name: 'Gemini Realtime SDK', type: 'realtime' },
   { id: 'elevenlabs-realtime', name: 'ElevenLabs Realtime', type: 'realtime' },
   { id: 'inworld-realtime', name: 'Inworld Realtime', type: 'realtime' },
 ];

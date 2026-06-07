@@ -1,4 +1,5 @@
 import type { ITTSProvider, IVoice, ISynthesizeOptions } from './types.js';
+import { buildGeminiVoices } from '../gemini-voices.js';
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = 'gemini-3.1-flash-tts-preview';
@@ -8,24 +9,11 @@ const MODELS = [
   'gemini-2.5-pro-preview-tts',
 ] as const;
 
-const VOICE_NAMES = [
-  'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir',
-  'Leda', 'Orus', 'Aoede', 'Callirrhoe', 'Autonoe',
-  'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina',
-  'Erinome', 'Algenib', 'Rasalgethi', 'Laomedeia', 'Achernar',
-  'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima', 'Achird',
-  'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat',
-] as const;
-
 function buildStaticVoices(): IVoice[] {
-  return VOICE_NAMES.map((name) => ({
-    id: name,
-    name,
-    language: 'multi',
-    gender: undefined,
+  return buildGeminiVoices([...MODELS]).map((voice) => ({
+    ...voice,
     description: undefined,
     previewUrl: undefined,
-    providerMeta: { supportedModels: [...MODELS] },
   }));
 }
 

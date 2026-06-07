@@ -1,6 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface RealtimeConnectConfig {
+  geminiModelSettings?: {
+    enableAffectiveDialog?: boolean;
+    proactivity?: {
+      proactiveAudio: boolean;
+    };
+    realtimeInputConfig?: {
+      turnCoverage:
+        | "TURN_INCLUDES_ONLY_ACTIVITY"
+        | "TURN_INCLUDES_ALL_INPUT"
+        | "TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO";
+    };
+    thinkingConfig?: {
+      includeThoughts?: boolean;
+      thinkingBudget?: number;
+      thinkingLevel?: "minimal" | "low" | "medium" | "high";
+    };
+  };
+  geminiTranscriptMode?: "live" | "final";
   language?: string;
   model: string;
   systemPrompt: string;

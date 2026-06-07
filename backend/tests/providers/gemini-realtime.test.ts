@@ -121,6 +121,22 @@ describe('GeminiRealtimeProvider', () => {
     expect(provider.name).toBe('Gemini Realtime');
   });
 
+  it('returns Gemini realtime voices with official gender labels', async () => {
+    const voices = await provider.getVoices('gemini-3.1-flash-live-preview');
+
+    expect(voices).toHaveLength(30);
+    expect(voices.find((voice) => voice.id === 'Kore')).toMatchObject({
+      id: 'Kore',
+      name: 'Kore',
+      language: 'multi',
+      gender: 'female',
+      providerMeta: {
+        supportedModels: ['gemini-3.1-flash-live-preview'],
+      },
+    });
+    expect(voices.find((voice) => voice.id === 'Puck')?.gender).toBe('male');
+  });
+
   it('lists live Gemini models and strips the models/ prefix', async () => {
     mockFetch.mockResolvedValueOnce(createJsonResponse({
       models: [
@@ -211,6 +227,69 @@ describe('GeminiRealtimeProvider', () => {
       },
     });
     expect(onEvent).not.toHaveBeenCalled();
+  });
+
+  it('includes enabled Gemini model settings in the setup message', async () => {
+    const onEvent = vi.fn<(event: RealtimeEvent) => void>();
+    const sessionPromise = provider.createSession(
+      {
+        geminiModelSettings: {
+          enableAffectiveDialog: true,
+          proactivity: {
+            proactiveAudio: true,
+          },
+          realtimeInputConfig: {
+            turnCoverage: 'TURN_INCLUDES_ONLY_ACTIVITY',
+          },
+          thinkingConfig: {
+            thinkingBudget: 1024,
+          },
+        },
+        model: 'gemini-2.5-flash-native-audio-latest',
+        systemPrompt: 'Be concise',
+      },
+      onEvent,
+    );
+
+    const socket = mockSocketInstances[0] as {
+      send: ReturnType<typeof vi.fn>;
+      url: string;
+      open(): void;
+      emitMessage(message: unknown): void;
+    };
+
+    expect(socket.url).toBe(
+      'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=test-api-key',
+    );
+
+    socket.open();
+
+    expect(JSON.parse(socket.send.mock.calls[0]![0] as string)).toEqual({
+      setup: {
+        model: 'models/gemini-2.5-flash-native-audio-latest',
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          thinkingConfig: {
+            thinkingBudget: 1024,
+          },
+        },
+        enableAffectiveDialog: true,
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+        proactivity: {
+          proactiveAudio: true,
+        },
+        realtimeInputConfig: {
+          turnCoverage: 'TURN_INCLUDES_ONLY_ACTIVITY',
+        },
+        systemInstruction: {
+          parts: [{ text: 'Be concise' }],
+        },
+      },
+    });
+
+    socket.emitMessage({ setupComplete: {} });
+    await sessionPromise;
   });
 
   it('closes the socket when startup setup send fails', async () => {
@@ -331,6 +410,8 @@ describe('GeminiRealtimeProvider', () => {
         {
           type: 'error',
           data: {
+            apiVersion: 'v1beta',
+            endpoint: 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent',
             message: 'Gemini websocket error',
             source: 'gemini',
           },
@@ -346,6 +427,128 @@ describe('GeminiRealtimeProvider', () => {
         },
       ],
     ]);
+  });
+
+  it('buffers Gemini transcript chunks until phrase boundaries in final transcript mode', async () => {
+    const onEvent = vi.fn<(event: RealtimeEvent) => void>();
+    const sessionPromise = provider.createSession(
+      {
+        geminiTranscriptMode: 'final',
+        model: 'models/gemini-3.1-flash-live-preview',
+        systemPrompt: 'Be helpful',
+      },
+      onEvent,
+    );
+
+    const socket = mockSocketInstances[0] as {
+      open(): void;
+      emitMessage(message: unknown): void;
+    };
+
+    socket.open();
+    socket.emitMessage({ setupComplete: {} });
+
+    await sessionPromise;
+
+    socket.emitMessage({
+      serverContent: {
+        inputTranscription: {
+          text: 'hello',
+        },
+      },
+    });
+    socket.emitMessage({
+      serverContent: {
+        inputTranscription: {
+          text: 'hello there',
+        },
+      },
+    });
+
+    expect(onEvent).not.toHaveBeenCalled();
+
+    socket.emitMessage({
+      serverContent: {
+        outputTranscription: {
+          text: 'assistant',
+        },
+      },
+    });
+
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(onEvent).toHaveBeenNthCalledWith(1, {
+      type: 'transcript',
+      data: {
+        role: 'user',
+        text: 'hello there',
+        final: true,
+      },
+    });
+
+    socket.emitMessage({
+      serverContent: {
+        outputTranscription: {
+          text: 'assistant reply',
+        },
+        turnComplete: true,
+      },
+    });
+
+    expect(onEvent).toHaveBeenNthCalledWith(2, {
+      type: 'transcript',
+      data: {
+        role: 'assistant',
+        text: 'assistant reply',
+        final: true,
+      },
+    });
+  });
+
+  it('joins Gemini delta transcript chunks without adding spaces inside words', async () => {
+    const onEvent = vi.fn<(event: RealtimeEvent) => void>();
+    const sessionPromise = provider.createSession(
+      {
+        geminiTranscriptMode: 'final',
+        model: 'models/gemini-3.1-flash-live-preview',
+        systemPrompt: 'Be helpful',
+      },
+      onEvent,
+    );
+
+    const socket = mockSocketInstances[0] as {
+      open(): void;
+      emitMessage(message: unknown): void;
+    };
+
+    socket.open();
+    socket.emitMessage({ setupComplete: {} });
+
+    await sessionPromise;
+
+    for (const text of ['При', 'вет', ',', ' как', ' ты', '?']) {
+      socket.emitMessage({
+        serverContent: {
+          inputTranscription: { text },
+        },
+      });
+    }
+
+    socket.emitMessage({
+      serverContent: {
+        outputTranscription: {
+          text: 'assistant reply',
+        },
+      },
+    });
+
+    expect(onEvent).toHaveBeenNthCalledWith(1, {
+      type: 'transcript',
+      data: {
+        role: 'user',
+        text: 'Привет, как ты?',
+        final: true,
+      },
+    });
   });
 
   it('reports goAway with a stable message and preserves timeLeft metadata', async () => {

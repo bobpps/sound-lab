@@ -5,6 +5,7 @@ const navItems = [
   { to: "/datasets", label: "Datasets" },
   { to: "/tts", label: "TTS Testing" },
   { to: "/realtime", label: "Realtime" },
+  { to: "/realtime-gemini", label: "Realtime Gemini" },
   { to: "/providers", label: "Providers" },
 ];
 

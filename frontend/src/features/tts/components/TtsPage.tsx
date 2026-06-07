@@ -69,6 +69,23 @@ function buildOriginalPlaybackMessages(
   }));
 }
 
+function filterVoiceMapForVoices(
+  voiceMap: VoiceMap,
+  voices: Array<{ id: string }>,
+): VoiceMap {
+  const voiceIds = new Set(voices.map((voice) => voice.id));
+  const next: VoiceMap = {};
+
+  for (const character of [1, 2] as const) {
+    const voiceId = voiceMap[character];
+    if (voiceId && voiceIds.has(voiceId)) {
+      next[character] = voiceId;
+    }
+  }
+
+  return next;
+}
+
 export function TtsPage() {
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
     null,
@@ -84,6 +101,8 @@ export function TtsPage() {
   const voicesQuery = useTtsVoices(selectedProviderId, selectedModel);
   const annotationQuery = useAnnotation(selectedAnnotationId);
   const dialogDetailQuery = useDialogDetail(selectedDialogId);
+  const currentVoices = voicesQuery.data ?? [];
+  const effectiveVoiceMap = filterVoiceMapForVoices(voiceMap, currentVoices);
 
   // null annotationId means "clean/no annotation" — use original dialog messages
   const useOriginal = selectedAnnotationId === null && selectedDialogId !== null;
@@ -102,7 +121,7 @@ export function TtsPage() {
     providerId: selectedProviderId,
     model: selectedModel,
     messages: playbackMessages,
-    voiceMap,
+    voiceMap: effectiveVoiceMap,
     synthesize,
   });
 
@@ -129,7 +148,6 @@ export function TtsPage() {
 
   function handleModelSelect(model: string) {
     setSelectedModel(model);
-    setVoiceMap({});
     playback.stop();
   }
 
@@ -203,8 +221,8 @@ export function TtsPage() {
               <p className="text-sm text-red-600">Failed to load voices.</p>
             ) : (
               <VoiceAssignment
-                voices={voicesQuery.data ?? []}
-                voiceMap={voiceMap}
+                voices={currentVoices}
+                voiceMap={effectiveVoiceMap}
                 onChange={setVoiceMap}
                 disabled={playback.status === "playing"}
               />

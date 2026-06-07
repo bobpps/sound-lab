@@ -43,7 +43,7 @@ describe('GeminiTTSProvider', () => {
         id: 'Zephyr',
         name: 'Zephyr',
         language: 'multi',
-        gender: undefined,
+        gender: 'female',
         description: undefined,
         previewUrl: undefined,
         providerMeta: {
@@ -54,6 +54,13 @@ describe('GeminiTTSProvider', () => {
           ],
         },
       });
+    });
+
+    it('includes official Gemini gender labels', async () => {
+      const voices = await provider.getVoices();
+
+      expect(voices.find((voice) => voice.id === 'Kore')?.gender).toBe('female');
+      expect(voices.find((voice) => voice.id === 'Puck')?.gender).toBe('male');
     });
 
     it('filters voices by model', async () => {

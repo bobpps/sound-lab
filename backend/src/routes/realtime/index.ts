@@ -11,6 +11,14 @@ interface RealtimeAccess {
   apiKey: string;
 }
 
+function getRealtimeApiKeyProviderId(providerId: string): string {
+  if (providerId === 'gemini-realtime-sdk') {
+    return 'gemini-realtime';
+  }
+
+  return providerId;
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
     realtimeApiKey?: string;
@@ -49,12 +57,117 @@ function parseMessage(raw: Buffer): Record<string, unknown> | null {
   }
 }
 
+function extractGeminiModelSettings(value: unknown): RealtimeSessionConfig['geminiModelSettings'] | null {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const settings: NonNullable<RealtimeSessionConfig['geminiModelSettings']> = {};
+  const {
+    enableAffectiveDialog,
+    proactivity,
+    realtimeInputConfig,
+    thinkingConfig,
+  } = value;
+
+  if (enableAffectiveDialog !== undefined) {
+    if (typeof enableAffectiveDialog !== 'boolean') {
+      return null;
+    }
+
+    settings.enableAffectiveDialog = enableAffectiveDialog;
+  }
+
+  if (proactivity !== undefined) {
+    if (!isRecord(proactivity) || typeof proactivity.proactiveAudio !== 'boolean') {
+      return null;
+    }
+
+    settings.proactivity = {
+      proactiveAudio: proactivity.proactiveAudio,
+    };
+  }
+
+  if (realtimeInputConfig !== undefined) {
+    if (!isRecord(realtimeInputConfig)) {
+      return null;
+    }
+
+    const { turnCoverage } = realtimeInputConfig;
+    if (
+      turnCoverage !== 'TURN_INCLUDES_ONLY_ACTIVITY' &&
+      turnCoverage !== 'TURN_INCLUDES_ALL_INPUT' &&
+      turnCoverage !== 'TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO'
+    ) {
+      return null;
+    }
+
+    settings.realtimeInputConfig = {
+      turnCoverage,
+    };
+  }
+
+  if (thinkingConfig !== undefined) {
+    if (!isRecord(thinkingConfig)) {
+      return null;
+    }
+
+    const { includeThoughts, thinkingBudget, thinkingLevel } = thinkingConfig;
+    const normalizedThinkingConfig: NonNullable<
+      NonNullable<RealtimeSessionConfig['geminiModelSettings']>['thinkingConfig']
+    > = {};
+
+    if (includeThoughts !== undefined) {
+      if (typeof includeThoughts !== 'boolean') {
+        return null;
+      }
+
+      normalizedThinkingConfig.includeThoughts = includeThoughts;
+    }
+
+    if (thinkingBudget !== undefined) {
+      if (
+        typeof thinkingBudget !== 'number' ||
+        !Number.isInteger(thinkingBudget) ||
+        thinkingBudget < 0
+      ) {
+        return null;
+      }
+
+      normalizedThinkingConfig.thinkingBudget = thinkingBudget;
+    }
+
+    if (thinkingLevel !== undefined) {
+      if (
+        thinkingLevel !== 'minimal' &&
+        thinkingLevel !== 'low' &&
+        thinkingLevel !== 'medium' &&
+        thinkingLevel !== 'high'
+      ) {
+        return null;
+      }
+
+      normalizedThinkingConfig.thinkingLevel = thinkingLevel;
+    }
+
+    settings.thinkingConfig = normalizedThinkingConfig;
+  }
+
+  return settings;
+}
+
 function extractSessionConfig(message: Record<string, unknown>): RealtimeSessionConfig | null {
   const source = isRecord(message.data) ? message.data : message;
   const model = source.model;
   const systemPrompt = source.systemPrompt;
   const language = source.language;
   const voice = source.voice;
+  const geminiTranscriptMode = source.geminiTranscriptMode;
+  const geminiModelSettings = extractGeminiModelSettings(source.geminiModelSettings);
 
   if (typeof model !== 'string' || typeof systemPrompt !== 'string') {
     return null;
@@ -68,7 +181,21 @@ function extractSessionConfig(message: Record<string, unknown>): RealtimeSession
     return null;
   }
 
+  if (
+    geminiTranscriptMode !== undefined &&
+    geminiTranscriptMode !== 'live' &&
+    geminiTranscriptMode !== 'final'
+  ) {
+    return null;
+  }
+
+  if (geminiModelSettings === null) {
+    return null;
+  }
+
   return {
+    ...(geminiModelSettings ? { geminiModelSettings } : {}),
+    ...(geminiTranscriptMode ? { geminiTranscriptMode } : {}),
     ...(language ? { language } : {}),
     model,
     systemPrompt,
@@ -95,9 +222,10 @@ const realtimeRoutes: FastifyPluginAsync = async (fastify) => {
       return null;
     }
 
-    const apiKey = await fastify.db.providers.getDecryptedKey(providerId);
+    const apiKeyProviderId = getRealtimeApiKeyProviderId(providerId);
+    const apiKey = await fastify.db.providers.getDecryptedKey(apiKeyProviderId);
     if (!apiKey) {
-      reply.badRequest(`No API key configured for provider ${providerId}`);
+      reply.badRequest(`No API key configured for provider ${apiKeyProviderId}`);
       return null;
     }
 

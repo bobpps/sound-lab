@@ -15,14 +15,29 @@ import {
   type UpdatePromptDraft,
 } from "./SessionControls.tsx";
 import { TranscriptionPanel } from "./TranscriptionPanel.tsx";
+import type { RealtimeConnectConfig } from "../hooks/useRealtimeSession.ts";
+
+type SessionConfigExtras = Pick<
+  RealtimeConnectConfig,
+  "geminiModelSettings" | "geminiTranscriptMode"
+>;
 
 interface RealtimeProviderTabProps {
   // PCM rate the microphone capture is resampled to before streaming. OpenAI
   // Realtime requires 24 kHz; other providers accept the 16 kHz default.
   inputSampleRate?: number;
   languageMode?: "auto-only" | "configurable";
+  modelFilter?: (models: string[]) => string[];
+  modelSettingsControls?: (params: {
+    disabled: boolean;
+    model: string;
+  }) => React.ReactNode;
+  promptProviderId?: string;
   providerId: string;
   providerLabel: string;
+  sessionConfigExtras?: Partial<SessionConfigExtras> | ((model: string) => Partial<SessionConfigExtras>);
+  systemPromptSuffix?: string;
+  transcriptControls?: React.ReactNode;
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -32,16 +47,23 @@ function getErrorMessage(error: unknown, fallback: string): string {
 export function RealtimeProviderTab({
   inputSampleRate,
   languageMode = "configurable",
+  modelFilter,
+  modelSettingsControls,
+  promptProviderId,
   providerId,
   providerLabel,
+  sessionConfigExtras,
+  systemPromptSuffix,
+  transcriptControls,
 }: RealtimeProviderTabProps) {
   const [selectedModel, setSelectedModel] = useState("");
-  const promptsQuery = useAgentPrompts(providerId);
+  const resolvedPromptProviderId = promptProviderId ?? providerId;
+  const promptsQuery = useAgentPrompts(resolvedPromptProviderId);
   const createPrompt = useCreateAgentPrompt();
   const updatePrompt = useUpdateAgentPrompt();
   const deletePrompt = useDeleteAgentPrompt();
   const modelsQuery = useRealtimeModels(providerId);
-  const models = modelsQuery.data ?? [];
+  const models = modelFilter ? modelFilter(modelsQuery.data ?? []) : modelsQuery.data ?? [];
   const resolvedModel =
     models.find((model) => model === selectedModel) ?? models[0] ?? "";
   const voicesQuery = useRealtimeVoices(providerId, resolvedModel || null);
@@ -63,7 +85,7 @@ export function RealtimeProviderTab({
     return createPrompt.mutateAsync({
       language: draft.language,
       prompt: draft.prompt,
-      provider_id: providerId,
+      provider_id: resolvedPromptProviderId,
       title: draft.title,
     });
   }
@@ -89,7 +111,19 @@ export function RealtimeProviderTab({
     systemPrompt: string;
     voice?: string;
   }) {
-    await session.connect(config);
+    const systemPrompt = systemPromptSuffix
+      ? `${config.systemPrompt.trim()}\n\n${systemPromptSuffix}`
+      : config.systemPrompt;
+    const resolvedSessionConfigExtras =
+      typeof sessionConfigExtras === "function"
+        ? sessionConfigExtras(config.model)
+        : sessionConfigExtras;
+
+    await session.connect({
+      ...config,
+      systemPrompt,
+      ...resolvedSessionConfigExtras,
+    });
 
     try {
       await startMicrophone({
@@ -153,9 +187,15 @@ export function RealtimeProviderTab({
         onUpdatePrompt={handleUpdatePrompt}
       />
 
+      {modelSettingsControls?.({
+        disabled: session.isConnected || session.isConnecting,
+        model: resolvedModel,
+      })}
+
       <TranscriptionPanel
         error={microphoneError ?? session.error}
         isConnected={session.isConnected}
+        transcriptControls={transcriptControls}
         transcripts={session.transcripts}
       />
     </div>

@@ -94,6 +94,25 @@ describe('Realtime routes', () => {
       expect(res.json()).toEqual(['gpt-realtime', 'gpt-realtime-mini']);
     });
 
+    it('uses the existing Gemini realtime API key for the Gemini SDK provider', async () => {
+      await seedRealtimeProvider('gemini-realtime', 'Gemini Realtime');
+      await app.db.providers.create({
+        id: 'gemini-realtime-sdk',
+        name: 'Gemini Realtime SDK',
+        type: 'realtime',
+      });
+      mockGetModels.mockResolvedValueOnce(['gemini-3.1-flash-live-preview']);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/realtime/gemini-realtime-sdk/models',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect((app as Record<string, ReturnType<typeof vi.fn>>).createRealtimeProvider)
+        .toHaveBeenCalledWith('gemini-realtime-sdk', 'test-api-key');
+    });
+
     it('returns 404 when provider does not exist', async () => {
       const res = await app.inject({
         method: 'GET',
@@ -213,6 +232,90 @@ describe('Realtime routes', () => {
           systemPrompt: 'You are helpful',
           language: 'en-US',
           voice: 'alloy',
+        },
+        expect.any(Function),
+      );
+
+      socket.terminate();
+    });
+
+    it('passes Gemini transcript mode through session_start config', async () => {
+      await seedRealtimeProvider('gemini-realtime', 'Gemini Realtime');
+      mockCreateSession.mockResolvedValueOnce({
+        sendAudio: mockSendAudio,
+        close: mockCloseSession,
+      });
+
+      const socket = await connectRealtimeSocket('/realtime/gemini-realtime/session');
+      const messagePromise = waitForSocketMessage(socket);
+
+      socket.send(JSON.stringify({
+        type: 'session_start',
+        data: {
+          geminiTranscriptMode: 'final',
+          model: 'gemini-2.5-flash-preview-native-audio-dialog',
+          systemPrompt: 'You are helpful',
+          voice: 'Kore',
+        },
+      }));
+
+      await messagePromise;
+
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        {
+          geminiTranscriptMode: 'final',
+          model: 'gemini-2.5-flash-preview-native-audio-dialog',
+          systemPrompt: 'You are helpful',
+          voice: 'Kore',
+        },
+        expect.any(Function),
+      );
+
+      socket.terminate();
+    });
+
+    it('passes Gemini model settings through session_start config', async () => {
+      await seedRealtimeProvider('gemini-realtime', 'Gemini Realtime');
+      mockCreateSession.mockResolvedValueOnce({
+        sendAudio: mockSendAudio,
+        close: mockCloseSession,
+      });
+
+      const socket = await connectRealtimeSocket('/realtime/gemini-realtime/session');
+      const messagePromise = waitForSocketMessage(socket);
+
+      socket.send(JSON.stringify({
+        type: 'session_start',
+        data: {
+          geminiModelSettings: {
+            realtimeInputConfig: {
+              turnCoverage: 'TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO',
+            },
+            thinkingConfig: {
+              includeThoughts: true,
+              thinkingLevel: 'minimal',
+            },
+          },
+          model: 'gemini-3.1-flash-live-preview',
+          systemPrompt: 'You are helpful',
+        },
+      }));
+
+      await messagePromise;
+
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        {
+          geminiModelSettings: {
+            realtimeInputConfig: {
+              turnCoverage: 'TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO',
+            },
+            thinkingConfig: {
+              includeThoughts: true,
+              thinkingLevel: 'minimal',
+            },
+          },
+          model: 'gemini-3.1-flash-live-preview',
+          systemPrompt: 'You are helpful',
         },
         expect.any(Function),
       );

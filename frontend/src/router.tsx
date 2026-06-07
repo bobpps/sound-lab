@@ -3,6 +3,7 @@ import { AppLayout } from "./components/layout/AppLayout.tsx";
 import { DatasetsPage } from "./features/datasets/components/DatasetsPage.tsx";
 import { DialogEditor } from "./features/datasets/components/DialogEditor.tsx";
 import { PromptEditor } from "./features/datasets/components/PromptEditor.tsx";
+import { GeminiRealtimePage } from "./features/realtime/components/GeminiRealtimePage.tsx";
 import { RealtimePage } from "./features/realtime/components/RealtimePage.tsx";
 import { TtsPage } from "./features/tts/components/TtsPage.tsx";
 import { ProvidersPage } from "./pages/ProvidersPage.tsx";
@@ -17,6 +18,7 @@ export function AppRouteTree() {
         <Route path="datasets/prompts/:promptId" element={<PromptEditor />} />
         <Route path="tts" element={<TtsPage />} />
         <Route path="realtime" element={<RealtimePage />} />
+        <Route path="realtime-gemini" element={<GeminiRealtimePage />} />
         <Route path="providers" element={<ProvidersPage />} />
       </Route>
     </Routes>

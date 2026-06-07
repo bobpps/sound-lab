@@ -60,7 +60,7 @@ const voicesByProviderAndModel: Record<string, Record<string, Array<{
   },
   "gemini-realtime": {
     "gemini-2.5-flash-preview-native-audio-dialog": [
-      { id: "Kore", name: "Kore", language: "multi" },
+      { id: "Kore", name: "Kore", language: "multi", gender: "female" },
     ],
   },
   "elevenlabs-realtime": {
@@ -251,7 +251,7 @@ describe("RealtimePage", () => {
     expect(
       screen.getByDisplayValue("gemini-2.5-flash-preview-native-audio-dialog"),
     ).toBeInTheDocument();
-    expect(await screen.findByDisplayValue("Kore")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Kore · female")).toBeInTheDocument();
     expect(screen.queryByLabelText("Dialog Language")).not.toBeInTheDocument();
   });
 

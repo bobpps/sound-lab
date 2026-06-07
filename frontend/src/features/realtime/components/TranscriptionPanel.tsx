@@ -5,6 +5,7 @@ import type { TranscriptEntry } from "../hooks/useRealtimeSession.ts";
 interface TranscriptionPanelProps {
   error: string | null;
   isConnected: boolean;
+  transcriptControls?: React.ReactNode;
   transcripts: TranscriptEntry[];
 }
 
@@ -23,6 +24,7 @@ function getRoleLabel(role: TranscriptEntry["role"]): string {
 export function TranscriptionPanel({
   error,
   isConnected,
+  transcriptControls,
   transcripts,
 }: TranscriptionPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -46,16 +48,20 @@ export function TranscriptionPanel({
           </p>
         </div>
 
-        <span
-          className={clsx(
-            "inline-flex rounded-full px-3 py-1 text-xs font-medium",
-            isConnected
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-gray-100 text-gray-600",
-          )}
-        >
-          {isConnected ? "Live" : "Waiting"}
-        </span>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {transcriptControls}
+
+          <span
+            className={clsx(
+              "inline-flex rounded-full px-3 py-1 text-xs font-medium",
+              isConnected
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-gray-100 text-gray-600",
+            )}
+          >
+            {isConnected ? "Live" : "Waiting"}
+          </span>
+        </div>
       </div>
 
       {error ? (

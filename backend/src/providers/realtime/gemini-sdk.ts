@@ -1,17 +1,22 @@
-import WebSocket, { type RawData } from 'ws';
+import {
+  GoogleGenAI,
+  Modality,
+  ThinkingLevel,
+  TurnCoverage,
+  type LiveConnectConfig,
+  type LiveServerMessage,
+  type Session,
+} from '@google/genai';
 import type { IRealtimeProvider, IRealtimeSession, RealtimeEvent, RealtimeSessionConfig } from './types.js';
 import type { IVoice } from '../tts/types.js';
 import { buildGeminiVoices } from '../gemini-voices.js';
 
-const GEMINI_REALTIME_URL_BASE =
-  'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage';
 const GEMINI_MODELS_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GEMINI_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
 const SESSION_CLOSE_TIMEOUT_MS = 5000;
 interface GeminiModelRecord {
   name?: string;
   baseModelId?: string;
-  displayName?: string;
   supportedGenerationMethods?: string[];
 }
 
@@ -19,33 +24,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function toBuffer(raw: RawData): Buffer {
-  if (typeof raw === 'string') {
-    return Buffer.from(raw);
-  }
-
-  if (raw instanceof ArrayBuffer) {
-    return Buffer.from(raw);
-  }
-
-  if (Array.isArray(raw)) {
-    return Buffer.concat(raw.map((chunk) => toBuffer(chunk)));
-  }
-
-  return Buffer.from(raw);
-}
-
-function parseJsonMessage(raw: RawData): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(toBuffer(raw).toString());
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
 function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (isRecord(error) && typeof error.message === 'string') {
+    return error.message;
+  }
+
+  if (isRecord(error) && error.error instanceof Error) {
+    return error.error.message;
+  }
+
+  return fallback;
 }
 
 function createErrorEvent(message: string, details?: Record<string, unknown>): RealtimeEvent {
@@ -144,41 +136,6 @@ class GeminiTranscriptBuffer {
   }
 }
 
-async function sendJson(socket: WebSocket, payload: Record<string, unknown>): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    socket.send(JSON.stringify(payload), (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
-}
-
-function normalizeModelName(name: string): string {
-  return name.startsWith('models/') ? name.slice('models/'.length) : name;
-}
-
-function getLiveModelName(model: GeminiModelRecord): string | null {
-  const candidate = typeof model.baseModelId === 'string'
-    ? model.baseModelId
-    : typeof model.name === 'string'
-      ? normalizeModelName(model.name)
-      : null;
-
-  if (!candidate) {
-    return null;
-  }
-
-  const methods = Array.isArray(model.supportedGenerationMethods)
-    ? model.supportedGenerationMethods
-    : [];
-
-  return methods.includes('bidiGenerateContent') ? candidate : null;
-}
-
 async function readErrorResponse(response: Response, fallback: string): Promise<string> {
   try {
     const body = await response.clone().json();
@@ -208,55 +165,57 @@ async function readErrorResponse(response: Response, fallback: string): Promise<
   return fallback;
 }
 
-function buildSetupMessage(config: RealtimeSessionConfig): Record<string, unknown> {
-  const generationConfig: Record<string, unknown> = {
-    responseModalities: ['AUDIO'],
-  };
-  const modelSettings = config.geminiModelSettings;
-
-  if (modelSettings?.thinkingConfig) {
-    generationConfig.thinkingConfig = modelSettings.thinkingConfig;
-  }
-
-  if (config.voice) {
-    generationConfig.speechConfig = {
-      voiceConfig: {
-        prebuiltVoiceConfig: {
-          voiceName: config.voice,
-        },
-      },
-    };
-  }
-
-  const setup: Record<string, unknown> = {
-    model: `models/${normalizeModelName(config.model)}`,
-    generationConfig,
-    inputAudioTranscription: {},
-    outputAudioTranscription: {},
-  };
-
-  if (modelSettings?.enableAffectiveDialog !== undefined) {
-    setup.enableAffectiveDialog = modelSettings.enableAffectiveDialog;
-  }
-
-  if (modelSettings?.proactivity) {
-    setup.proactivity = modelSettings.proactivity;
-  }
-
-  if (modelSettings?.realtimeInputConfig) {
-    setup.realtimeInputConfig = modelSettings.realtimeInputConfig;
-  }
-
-  if (config.systemPrompt) {
-    setup.systemInstruction = {
-      parts: [{ text: config.systemPrompt }],
-    };
-  }
-
-  return { setup };
+function normalizeModelName(name: string): string {
+  return name.startsWith('models/') ? name.slice('models/'.length) : name;
 }
 
-function getRealtimeApiVersion(config: RealtimeSessionConfig): 'v1alpha' | 'v1beta' {
+function getLiveModelName(model: GeminiModelRecord): string | null {
+  const candidate = typeof model.baseModelId === 'string'
+    ? model.baseModelId
+    : typeof model.name === 'string'
+      ? normalizeModelName(model.name)
+      : null;
+
+  if (!candidate) {
+    return null;
+  }
+
+  const methods = Array.isArray(model.supportedGenerationMethods)
+    ? model.supportedGenerationMethods
+    : [];
+
+  return methods.includes('bidiGenerateContent') ? candidate : null;
+}
+
+function mapThinkingLevel(level: string): ThinkingLevel {
+  switch (level) {
+    case 'minimal':
+      return ThinkingLevel.MINIMAL;
+    case 'low':
+      return ThinkingLevel.LOW;
+    case 'medium':
+      return ThinkingLevel.MEDIUM;
+    case 'high':
+      return ThinkingLevel.HIGH;
+    default:
+      return ThinkingLevel.THINKING_LEVEL_UNSPECIFIED;
+  }
+}
+
+function mapTurnCoverage(turnCoverage: string): TurnCoverage {
+  switch (turnCoverage) {
+    case 'TURN_INCLUDES_ONLY_ACTIVITY':
+      return TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY;
+    case 'TURN_INCLUDES_ALL_INPUT':
+      return TurnCoverage.TURN_INCLUDES_ALL_INPUT;
+    case 'TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO':
+      return TurnCoverage.TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO;
+    default:
+      return TurnCoverage.TURN_COVERAGE_UNSPECIFIED;
+  }
+}
+
+function getSdkApiVersion(config: RealtimeSessionConfig): 'v1alpha' | 'v1beta' {
   const modelSettings = config.geminiModelSettings;
   const requiresAlpha =
     modelSettings?.enableAffectiveDialog !== undefined
@@ -265,67 +224,65 @@ function getRealtimeApiVersion(config: RealtimeSessionConfig): 'v1alpha' | 'v1be
   return requiresAlpha ? 'v1alpha' : 'v1beta';
 }
 
-function buildRealtimeUrl(config: RealtimeSessionConfig, apiKey: string): URL {
-  const apiVersion = getRealtimeApiVersion(config);
-  const url = new URL(
-    `${GEMINI_REALTIME_URL_BASE}.${apiVersion}.GenerativeService.BidiGenerateContent`,
-  );
-  url.searchParams.set('key', apiKey);
-  return url;
-}
+function buildLiveConfig(config: RealtimeSessionConfig): LiveConnectConfig {
+  const liveConfig: LiveConnectConfig = {
+    responseModalities: [Modality.AUDIO],
+    inputAudioTranscription: {},
+    outputAudioTranscription: {},
+  };
+  const modelSettings = config.geminiModelSettings;
 
-function getSafeRealtimeUrl(url: URL): string {
-  const safeUrl = new URL(url.toString());
-  safeUrl.searchParams.delete('key');
-  return safeUrl.toString();
-}
-
-function closeSocket(socket: WebSocket, code: number, reason: string): void {
-  if (socket.readyState >= WebSocket.CLOSING) {
-    return;
+  if (config.voice) {
+    liveConfig.speechConfig = {
+      voiceConfig: {
+        prebuiltVoiceConfig: {
+          voiceName: config.voice,
+        },
+      },
+    };
   }
 
-  socket.close(code, reason);
-}
+  if (config.systemPrompt) {
+    liveConfig.systemInstruction = config.systemPrompt;
+  }
 
-function waitForSocketClose(socket: WebSocket): Promise<void> {
-  return new Promise((resolve) => {
-    let resolved = false;
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  if (modelSettings?.thinkingConfig) {
+    liveConfig.thinkingConfig = {};
 
-    const finish = (): void => {
-      if (resolved) {
-        return;
-      }
+    if (modelSettings.thinkingConfig.includeThoughts !== undefined) {
+      liveConfig.thinkingConfig.includeThoughts = modelSettings.thinkingConfig.includeThoughts;
+    }
 
-      resolved = true;
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
-      resolve();
+    if (modelSettings.thinkingConfig.thinkingBudget !== undefined) {
+      liveConfig.thinkingConfig.thinkingBudget = modelSettings.thinkingConfig.thinkingBudget;
+    }
+
+    if (modelSettings.thinkingConfig.thinkingLevel !== undefined) {
+      liveConfig.thinkingConfig.thinkingLevel =
+        mapThinkingLevel(modelSettings.thinkingConfig.thinkingLevel);
+    }
+  }
+
+  if (modelSettings?.enableAffectiveDialog !== undefined) {
+    liveConfig.enableAffectiveDialog = modelSettings.enableAffectiveDialog;
+  }
+
+  if (modelSettings?.proactivity) {
+    liveConfig.proactivity = modelSettings.proactivity;
+  }
+
+  if (modelSettings?.realtimeInputConfig) {
+    liveConfig.realtimeInputConfig = {
+      turnCoverage: mapTurnCoverage(modelSettings.realtimeInputConfig.turnCoverage),
     };
+  }
 
-    socket.once('close', () => {
-      finish();
-    });
-
-    timeoutHandle = setTimeout(() => {
-      if ('terminate' in socket && typeof socket.terminate === 'function') {
-        socket.terminate();
-      }
-
-      finish();
-    }, SESSION_CLOSE_TIMEOUT_MS);
-  });
+  return liveConfig;
 }
 
 function extractGoAwayEvent(goAway: Record<string, unknown>): RealtimeEvent {
-  const message = typeof goAway.message === 'string'
-    ? goAway.message
-    : 'Gemini Live API requested session shutdown';
-
-  return createErrorEvent(message, {
-    source: 'gemini',
+  return createErrorEvent('Gemini Live API requested session shutdown', {
+    source: 'gemini-sdk',
     timeLeft: typeof goAway.timeLeft === 'string' ? goAway.timeLeft : undefined,
   });
 }
@@ -395,26 +352,25 @@ function emitServerContent(
   }
 }
 
-class GeminiRealtimeSession implements IRealtimeSession {
+class GeminiSdkRealtimeSession implements IRealtimeSession {
   private closePromise: Promise<void> | null = null;
   private closed = false;
 
   constructor(
-    private readonly socket: WebSocket,
+    private readonly session: Session,
+    private readonly waitForClose: () => Promise<void>,
     private readonly suppressRemoteSessionEnd: () => void,
   ) {}
 
-  async sendAudio(chunk: Buffer): Promise<void> {
-    if (this.closed || this.socket.readyState !== WebSocket.OPEN) {
-      throw new Error('Gemini Realtime session is not open');
+  sendAudio(chunk: Buffer): void {
+    if (this.closed) {
+      throw new Error('Gemini SDK realtime session is not open');
     }
 
-    await sendJson(this.socket, {
-      realtimeInput: {
-        audio: {
-          data: chunk.toString('base64'),
-          mimeType: GEMINI_AUDIO_MIME_TYPE,
-        },
+    this.session.sendRealtimeInput({
+      audio: {
+        data: chunk.toString('base64'),
+        mimeType: GEMINI_AUDIO_MIME_TYPE,
       },
     });
   }
@@ -427,32 +383,23 @@ class GeminiRealtimeSession implements IRealtimeSession {
     this.closed = true;
     this.suppressRemoteSessionEnd();
 
-    if (this.socket.readyState === WebSocket.CLOSED) {
-      this.closePromise = Promise.resolve();
-      return this.closePromise;
+    this.closePromise = this.waitForClose();
+
+    try {
+      this.session.sendRealtimeInput({ audioStreamEnd: true });
+    } catch {
+      // Best effort flush before shutdown.
     }
 
-    this.closePromise = waitForSocketClose(this.socket);
-
-    if (this.socket.readyState === WebSocket.OPEN) {
-      await sendJson(this.socket, {
-        realtimeInput: {
-          audioStreamEnd: true,
-        },
-      }).catch(() => {
-        // Best effort flush before shutdown.
-      });
-    }
-
-    closeSocket(this.socket, 1000, 'Session closed');
+    this.session.close();
 
     return this.closePromise;
   }
 }
 
-export class GeminiRealtimeProvider implements IRealtimeProvider {
-  readonly id = 'gemini-realtime';
-  readonly name = 'Gemini Realtime';
+export class GeminiSdkRealtimeProvider implements IRealtimeProvider {
+  readonly id = 'gemini-realtime-sdk';
+  readonly name = 'Gemini Realtime SDK';
 
   constructor(private readonly apiKey: string) {}
 
@@ -512,18 +459,39 @@ export class GeminiRealtimeProvider implements IRealtimeProvider {
     config: RealtimeSessionConfig,
     onEvent: (event: RealtimeEvent) => void,
   ): Promise<IRealtimeSession> {
-    const url = buildRealtimeUrl(config, this.apiKey);
-    const apiVersion = getRealtimeApiVersion(config);
-    const safeUrl = getSafeRealtimeUrl(url);
-
-    const socket = new WebSocket(url);
+    const apiVersion = getSdkApiVersion(config);
+    const ai = new GoogleGenAI({
+      apiKey: this.apiKey,
+      httpOptions: { apiVersion },
+    });
     const transcriptBuffer = config.geminiTranscriptMode === 'final'
       ? new GeminiTranscriptBuffer(onEvent)
       : undefined;
 
-    let session: GeminiRealtimeSession | null = null;
+    let sdkSession: Session | null = null;
     let startupSettled = false;
+    let pendingSetupComplete = false;
     let remoteSessionEndEnabled = true;
+    let resolveClose: (() => void) | null = null;
+    let closeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const waitForClose = (): Promise<void> => new Promise((resolve) => {
+      resolveClose = () => {
+        if (closeTimeout) {
+          clearTimeout(closeTimeout);
+          closeTimeout = null;
+        }
+        resolve();
+      };
+
+      closeTimeout = setTimeout(() => {
+        resolveClose?.();
+      }, SESSION_CLOSE_TIMEOUT_MS);
+    });
+
+    const finishClose = (): void => {
+      resolveClose?.();
+    };
 
     const suppressRemoteSessionEnd = (): void => {
       remoteSessionEndEnabled = false;
@@ -548,97 +516,97 @@ export class GeminiRealtimeProvider implements IRealtimeProvider {
         reject(payload as Error);
       };
 
-      const failStartup = (message: string): void => {
-        suppressRemoteSessionEnd();
-        settleStartup('reject', new Error(message));
-        closeSocket(socket, 1011, message);
+      const resolveWhenReady = (): void => {
+        if (!sdkSession) {
+          pendingSetupComplete = true;
+          return;
+        }
+
+        settleStartup(
+          'resolve',
+          new GeminiSdkRealtimeSession(
+            sdkSession,
+            waitForClose,
+            suppressRemoteSessionEnd,
+          ),
+        );
       };
 
-      socket.on('open', () => {
-        void sendJson(socket, buildSetupMessage(config)).catch((error) => {
-          failStartup(getErrorMessage(error, 'Failed to configure Gemini realtime session'));
-        });
-      });
+      void ai.live.connect({
+        model: normalizeModelName(config.model),
+        config: buildLiveConfig(config),
+        callbacks: {
+          onmessage: (message: LiveServerMessage) => {
+            if (message.setupComplete) {
+              resolveWhenReady();
+              return;
+            }
 
-      socket.on('message', (rawMessage) => {
-        const message = parseJsonMessage(rawMessage);
-        if (!message) {
-          onEvent(createErrorEvent(
-            'Invalid JSON event received from Gemini Live API',
-            { source: 'gemini' },
-          ));
-          return;
+            if (message.serverContent) {
+              emitServerContent(
+                message.serverContent as unknown as Record<string, unknown>,
+                onEvent,
+                transcriptBuffer,
+              );
+              return;
+            }
+
+            if (message.goAway) {
+              transcriptBuffer?.flushAll();
+              onEvent(extractGoAwayEvent(message.goAway as unknown as Record<string, unknown>));
+            }
+          },
+          onerror: (error) => {
+            transcriptBuffer?.flushAll();
+            const message = getErrorMessage(error, 'Gemini SDK realtime websocket error');
+            onEvent(createErrorEvent(message, {
+              apiVersion,
+              source: 'gemini-sdk',
+            }));
+
+            if (!startupSettled) {
+              settleStartup('reject', new Error(`${message} (Gemini SDK API ${apiVersion})`));
+            }
+          },
+          onclose: (event) => {
+            transcriptBuffer?.flushAll();
+            finishClose();
+
+            const code = typeof event.code === 'number' ? event.code : undefined;
+            const reason = typeof event.reason === 'string' ? event.reason : '';
+
+            if (!startupSettled) {
+              settleStartup(
+                'reject',
+                new Error(
+                  reason
+                    ? `${reason} (Gemini SDK API ${apiVersion})`
+                    : `Gemini SDK websocket closed before session was ready (${code ?? 'unknown'}, Gemini API ${apiVersion})`,
+                ),
+              );
+              return;
+            }
+
+            if (remoteSessionEndEnabled) {
+              onEvent({
+                type: 'session_end',
+                data: {
+                  code,
+                  reason,
+                },
+              });
+            }
+          },
+        },
+      }).then((session) => {
+        sdkSession = session;
+
+        if (pendingSetupComplete) {
+          resolveWhenReady();
         }
-
-        if ('setupComplete' in message) {
-          if (!session) {
-            session = new GeminiRealtimeSession(socket, suppressRemoteSessionEnd);
-          }
-
-          settleStartup('resolve', session);
-          return;
-        }
-
-        if (isRecord(message.serverContent)) {
-          emitServerContent(message.serverContent, onEvent, transcriptBuffer);
-          return;
-        }
-
-        if (isRecord(message.goAway)) {
-          transcriptBuffer?.flushAll();
-          const goAwayEvent = extractGoAwayEvent(message.goAway);
-          onEvent(goAwayEvent);
-
-          if (!startupSettled) {
-            const payload = isRecord(goAwayEvent.data) ? goAwayEvent.data : null;
-            failStartup(
-              typeof payload?.message === 'string'
-                ? payload.message
-                : 'Gemini Live API requested session shutdown',
-            );
-          }
-        }
-      });
-
-      socket.on('error', (error) => {
-        transcriptBuffer?.flushAll();
-        const message = getErrorMessage(error, 'Gemini websocket error');
-        onEvent(createErrorEvent(message, {
-          apiVersion,
-          endpoint: safeUrl,
-          source: 'gemini',
-        }));
-
-        if (!startupSettled) {
-          failStartup(message);
-        }
-      });
-
-      socket.on('close', (code, reason) => {
-        transcriptBuffer?.flushAll();
-        const closeReason = toBuffer(reason).toString();
-
-        if (!startupSettled) {
-          settleStartup(
-            'reject',
-            new Error(
-              closeReason
-                ? `${closeReason} (Gemini API ${apiVersion})`
-                : `Gemini websocket closed before session was ready (${code}, Gemini API ${apiVersion})`,
-            ),
-          );
-          return;
-        }
-
-        if (remoteSessionEndEnabled) {
-          onEvent({
-            type: 'session_end',
-            data: {
-              code,
-              reason: closeReason,
-            },
-          });
-        }
+      }).catch((error: unknown) => {
+        const message = getErrorMessage(error, 'Failed to create Gemini SDK realtime session');
+        settleStartup('reject', new Error(`${message} (Gemini SDK API ${apiVersion})`));
       });
     });
   }
