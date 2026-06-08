@@ -282,15 +282,22 @@ describe("Router", () => {
         screen.getByRole("heading", { name: "Providers" }),
       ).toBeInTheDocument();
     });
+
+    it("renders Voice Matcher page at /voice-matcher", () => {
+      renderWithRouter(["/voice-matcher"]);
+      expect(
+        screen.getByRole("heading", { name: "Voice Matcher" }),
+      ).toBeInTheDocument();
+    });
   });
 
   describe("Sidebar", () => {
-    it("renders all 5 navigation links", () => {
+    it("renders all 6 navigation links", () => {
       renderWithRouter(["/datasets"]);
       const nav = screen.getByRole("navigation");
       const links = within(nav).getAllByRole("link");
 
-      expect(links).toHaveLength(5);
+      expect(links).toHaveLength(6);
       expect(nav).toContainElement(links[0]);
     });
 
@@ -301,6 +308,7 @@ describe("Router", () => {
       expect(screen.getByRole("link", { name: "Realtime" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Realtime Gemini" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Providers" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Voice Matcher" })).toBeInTheDocument();
     });
 
     it("highlights the active nav link", () => {

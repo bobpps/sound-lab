@@ -6,6 +6,7 @@ import { PromptEditor } from "./features/datasets/components/PromptEditor.tsx";
 import { GeminiRealtimePage } from "./features/realtime/components/GeminiRealtimePage.tsx";
 import { RealtimePage } from "./features/realtime/components/RealtimePage.tsx";
 import { TtsPage } from "./features/tts/components/TtsPage.tsx";
+import { VoiceMatcherPage } from "./features/voice-matcher/VoiceMatcherPage.tsx";
 import { ProvidersPage } from "./pages/ProvidersPage.tsx";
 
 export function AppRouteTree() {
@@ -20,6 +21,7 @@ export function AppRouteTree() {
         <Route path="realtime" element={<RealtimePage />} />
         <Route path="realtime-gemini" element={<GeminiRealtimePage />} />
         <Route path="providers" element={<ProvidersPage />} />
+        <Route path="voice-matcher" element={<VoiceMatcherPage />} />
       </Route>
     </Routes>
   );

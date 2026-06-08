@@ -7,6 +7,7 @@ const navItems = [
   { to: "/realtime", label: "Realtime" },
   { to: "/realtime-gemini", label: "Realtime Gemini" },
   { to: "/providers", label: "Providers" },
+  { to: "/voice-matcher", label: "Voice Matcher" },
 ];
 
 export function Sidebar() {

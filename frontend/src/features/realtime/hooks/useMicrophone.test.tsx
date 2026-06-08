@@ -276,12 +276,15 @@ describe("useMicrophone", () => {
     expect(secondStop).toBe(firstStop);
     expect(workletNode!.port.postMessage).toHaveBeenCalledTimes(1);
 
-    act(() => {
+    // Resolve the deferred flush AND await the stop promise inside act(): stop()
+    // calls setIsRecording(false) only after the flush resolves, so awaiting it
+    // outside act() leaks that state update past this test and intermittently
+    // destabilizes the next one ("stops the acquired stream …").
+    await act(async () => {
       workletNode!.port.flush();
+      await firstStop;
+      await secondStop;
     });
-
-    await firstStop;
-    await secondStop;
     expect(workletNode!.disconnect).toHaveBeenCalledTimes(1);
   });
 
