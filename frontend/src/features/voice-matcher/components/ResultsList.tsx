@@ -7,6 +7,7 @@ interface ResultsListProps {
   results: ResultMap;
   onPlay: (url: string) => void;
   onPlayAll: () => void;
+  isRunning: boolean;
 }
 
 export function ResultsList({
@@ -15,6 +16,7 @@ export function ResultsList({
   results,
   onPlay,
   onPlayAll,
+  isRunning,
 }: ResultsListProps) {
   return (
     <div className="flex flex-col gap-4">
@@ -22,8 +24,12 @@ export function ResultsList({
         <h2 className="text-lg font-medium text-gray-900">Results</h2>
         <button
           type="button"
-          className="rounded bg-blue-600 px-3 py-1 text-sm text-white"
+          className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
           onClick={onPlayAll}
+          // While the batch runs, some cards have no URL yet; playAll snapshots
+          // the ready URLs once, so late finishers would be skipped. Disable
+          // until the batch settles.
+          disabled={isRunning}
         >
           Play all in sequence
         </button>

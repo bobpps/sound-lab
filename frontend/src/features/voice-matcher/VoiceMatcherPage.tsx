@@ -175,6 +175,7 @@ export function VoiceMatcherPage() {
           results={results}
           onPlay={play}
           onPlayAll={playAll}
+          isRunning={isRunning}
         />
       ) : null}
     </div>

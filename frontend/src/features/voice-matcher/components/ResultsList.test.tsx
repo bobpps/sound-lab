@@ -19,6 +19,7 @@ describe("ResultsList", () => {
         results={results}
         onPlay={() => {}}
         onPlayAll={() => {}}
+        isRunning={false}
       />,
     );
     expect(screen.getByText("Kore")).toBeInTheDocument();
@@ -36,11 +37,31 @@ describe("ResultsList", () => {
         results={results}
         onPlay={() => {}}
         onPlayAll={onPlayAll}
+        isRunning={false}
       />,
     );
     await user.click(
       screen.getByRole("button", { name: /play all in sequence/i }),
     );
     expect(onPlayAll).toHaveBeenCalled();
+  });
+
+  it("disables play-all while a batch is still running", () => {
+    // While synthesizing, some cards have no URL yet; playAll captures the
+    // ready URLs once, so late finishers would be skipped. Disabling until the
+    // batch settles avoids a partial play-all.
+    render(
+      <ResultsList
+        referenceLabel="Kore"
+        candidateLabels={["en-US-Standard-A"]}
+        results={{ Kore: { status: "done", url: "blob:ref" } }}
+        onPlay={() => {}}
+        onPlayAll={() => {}}
+        isRunning
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /play all in sequence/i }),
+    ).toBeDisabled();
   });
 });
