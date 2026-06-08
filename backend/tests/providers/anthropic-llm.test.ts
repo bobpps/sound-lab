@@ -43,10 +43,10 @@ describe('AnthropicLLMProvider', () => {
       models.forEach((m) => expect(typeof m).toBe('string'));
     });
 
-    it('includes claude-sonnet-4-5-20250929', async () => {
+    it('includes claude-haiku-4-5', async () => {
       const models = await provider.getModels();
 
-      expect(models).toContain('claude-sonnet-4-5-20250929');
+      expect(models).toContain('claude-haiku-4-5');
     });
 
     it('does not call any SDK method', async () => {
@@ -64,12 +64,12 @@ describe('AnthropicLLMProvider', () => {
 
       await provider.complete(
         [{ role: 'user', content: 'Hi' }],
-        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5',
       );
 
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'claude-sonnet-4-5-20250929',
+          model: 'claude-haiku-4-5',
           max_tokens: 4096,
           messages: [{ role: 'user', content: 'Hi' }],
         }),
@@ -86,7 +86,7 @@ describe('AnthropicLLMProvider', () => {
           { role: 'system', content: 'You are helpful.' },
           { role: 'user', content: 'Hello' },
         ],
-        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5',
       );
 
       expect(mockCreate).toHaveBeenCalledWith(
@@ -108,7 +108,7 @@ describe('AnthropicLLMProvider', () => {
           { role: 'system', content: 'Be concise.' },
           { role: 'user', content: 'Hello' },
         ],
-        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5',
       );
 
       expect(mockCreate).toHaveBeenCalledWith(
@@ -126,7 +126,7 @@ describe('AnthropicLLMProvider', () => {
 
       await provider.complete(
         [{ role: 'user', content: 'Hello' }],
-        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5',
       );
 
       const callArgs = mockCreate.mock.calls[0][0];
@@ -140,7 +140,7 @@ describe('AnthropicLLMProvider', () => {
 
       const result = await provider.complete(
         [{ role: 'user', content: 'What is the answer?' }],
-        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5',
       );
 
       expect(result).toBe('The answer is 42');
@@ -156,7 +156,7 @@ describe('AnthropicLLMProvider', () => {
 
       const result = await provider.complete(
         [{ role: 'user', content: 'Hello' }],
-        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5',
       );
 
       expect(result).toBe('First part. Second part.');
@@ -173,7 +173,7 @@ describe('AnthropicLLMProvider', () => {
 
       const result = await provider.complete(
         [{ role: 'user', content: 'Hello' }],
-        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5',
       );
 
       expect(result).toBe('Before tool. After tool.');
@@ -186,7 +186,7 @@ describe('AnthropicLLMProvider', () => {
 
       const result = await provider.complete(
         [{ role: 'user', content: 'Hello' }],
-        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5',
       );
 
       expect(result).toBe('');
@@ -198,7 +198,7 @@ describe('AnthropicLLMProvider', () => {
       await expect(
         provider.complete(
           [{ role: 'user', content: 'Hello' }],
-          'claude-sonnet-4-5-20250929',
+          'claude-haiku-4-5',
         ),
       ).rejects.toThrow('Anthropic API error: authentication_error: invalid x-api-key');
     });
@@ -209,7 +209,7 @@ describe('AnthropicLLMProvider', () => {
       await expect(
         provider.complete(
           [{ role: 'user', content: 'Hello' }],
-          'claude-sonnet-4-5-20250929',
+          'claude-haiku-4-5',
         ),
       ).rejects.toThrow('Anthropic API error: Connection error');
     });
@@ -226,7 +226,7 @@ describe('AnthropicLLMProvider', () => {
 
     it('returns true when model listing succeeds', async () => {
       mockModelsList.mockReturnValue(mockModelIterator({
-        id: 'claude-3-5-haiku-20241022',
+        id: 'claude-haiku-4-5',
       }));
 
       const result = await provider.validateCredentials();

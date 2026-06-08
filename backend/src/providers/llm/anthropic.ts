@@ -7,11 +7,9 @@ export class AnthropicLLMProvider implements ILLMProvider {
   private readonly client: Anthropic;
 
   private static readonly MODELS = [
-    'claude-sonnet-4-5-20250929',
-    'claude-haiku-3-5-20241022',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-5-haiku-20241022',
-    'claude-3-opus-20240229',
+    'claude-opus-4-8',
+    'claude-sonnet-4-6',
+    'claude-haiku-4-5',
   ];
 
   constructor(apiKey: string) {

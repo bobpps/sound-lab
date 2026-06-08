@@ -14,7 +14,7 @@ describe("ResultsList", () => {
   it("renders the reference card and one card per candidate", () => {
     render(
       <ResultsList
-        referenceLabel="Kore"
+        referenceLabels={["Kore"]}
         candidateLabels={["en-US-Standard-A", "en-US-Standard-C"]}
         results={results}
         onPlay={() => {}}
@@ -32,7 +32,7 @@ describe("ResultsList", () => {
     const user = userEvent.setup();
     render(
       <ResultsList
-        referenceLabel="Kore"
+        referenceLabels={["Kore"]}
         candidateLabels={["en-US-Standard-A"]}
         results={results}
         onPlay={() => {}}
@@ -52,7 +52,7 @@ describe("ResultsList", () => {
     // batch settles avoids a partial play-all.
     render(
       <ResultsList
-        referenceLabel="Kore"
+        referenceLabels={["Kore"]}
         candidateLabels={["en-US-Standard-A"]}
         results={{ Kore: { status: "done", url: "blob:ref" } }}
         onPlay={() => {}}

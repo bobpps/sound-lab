@@ -28,21 +28,16 @@ describe("ReferencePicker", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders model and voice selects and shows the gender badge for the selected voice", async () => {
+  it("renders the voice select and shows the gender badge for the selected voice", async () => {
     render(
-      <ReferencePicker
-        model="gemini-2.5-flash-preview-tts"
-        voiceId="Kore"
-        onModelChange={() => {}}
-        onVoiceChange={() => {}}
-      />,
+      <ReferencePicker voiceId="Kore" onVoiceChange={() => {}} />,
       { wrapper: createTestWrapper() },
     );
 
     expect(
-      await screen.findByRole("option", { name: "Kore" }),
+      await screen.findByRole("option", { name: "Kore (female)" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Reference model")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Reference model")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Reference voice")).toBeInTheDocument();
     expect(screen.getByText("female")).toBeInTheDocument();
   });
@@ -51,16 +46,11 @@ describe("ReferencePicker", () => {
     const onVoiceChange = vi.fn();
     const user = userEvent.setup();
     render(
-      <ReferencePicker
-        model="gemini-2.5-flash-preview-tts"
-        voiceId="Kore"
-        onModelChange={() => {}}
-        onVoiceChange={onVoiceChange}
-      />,
+      <ReferencePicker voiceId="Kore" onVoiceChange={onVoiceChange} />,
       { wrapper: createTestWrapper() },
     );
 
-    await screen.findByRole("option", { name: "Puck" });
+    await screen.findByRole("option", { name: "Puck (male)" });
     await user.selectOptions(screen.getByLabelText("Reference voice"), "Puck");
     expect(onVoiceChange).toHaveBeenCalledWith("Puck");
   });

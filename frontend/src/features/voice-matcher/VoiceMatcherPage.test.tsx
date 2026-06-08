@@ -49,6 +49,7 @@ const standardVoices = [
 ];
 
 beforeEach(() => {
+  window.localStorage.clear();
   stubAudio();
   vi.stubGlobal("URL", {
     ...globalThis.URL,
@@ -64,6 +65,21 @@ beforeEach(() => {
       }
       if (url.includes("/api/tts/google/voices")) {
         return jsonResponse(standardVoices);
+      }
+      if (url.includes("/providers?type=llm")) {
+        return jsonResponse([
+          {
+            id: "anthropic",
+            name: "Anthropic",
+            type: "llm",
+            enabled: true,
+            has_key: true,
+            created_at: "2024-01-01",
+          },
+        ]);
+      }
+      if (url.includes("/llm/anthropic/models")) {
+        return jsonResponse(["claude-haiku-4-5"]);
       }
       if (url.includes("/synthesize")) {
         return new Response(new Blob(["audio"]), { status: 200 });
@@ -87,17 +103,92 @@ describe("VoiceMatcherPage", () => {
 
   it("disables the synth button when text is empty", async () => {
     render(<VoiceMatcherPage />, { wrapper: createTestWrapper() });
-    await screen.findByRole("option", { name: "Kore" });
+    await screen.findByRole("option", { name: "Kore (female)" });
     expect(
       screen.getByRole("button", { name: /synthesize and compare/i }),
     ).toBeDisabled();
+  });
+
+  it("has no reference model select", async () => {
+    render(<VoiceMatcherPage />, { wrapper: createTestWrapper() });
+    await screen.findByRole("option", { name: "Kore (female)" });
+    expect(screen.queryByLabelText("Reference model")).not.toBeInTheDocument();
+  });
+
+  it("synthesizes the reference voice across all three models", async () => {
+    const user = userEvent.setup();
+    render(<VoiceMatcherPage />, { wrapper: createTestWrapper() });
+
+    await screen.findByRole("option", { name: "Kore (female)" });
+    await user.selectOptions(screen.getByLabelText("Reference voice"), "Kore");
+    await user.selectOptions(screen.getByLabelText("Standard locale"), "en-US");
+    await user.type(screen.getByLabelText("Phrase"), "hello");
+
+    await user.click(
+      screen.getByRole("button", { name: /synthesize and compare/i }),
+    );
+
+    // One reference card per model, all keyed by the model name.
+    expect(
+      await screen.findByText("gemini-2.5-flash-preview-tts"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("gemini-2.5-pro-preview-tts"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("gemini-3.1-flash-tts-preview"),
+    ).toBeInTheDocument();
+  });
+
+  it("persists the translation source text on remount", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<VoiceMatcherPage />, {
+      wrapper: createTestWrapper(),
+    });
+
+    await screen.findByRole("option", { name: "Anthropic" });
+    await user.selectOptions(
+      screen.getByLabelText("Translation provider"),
+      "anthropic",
+    );
+    await user.type(screen.getByLabelText("Translate"), "перевести это");
+
+    unmount();
+
+    render(<VoiceMatcherPage />, { wrapper: createTestWrapper() });
+
+    // The provider is persisted too, so the textarea restores enabled with text.
+    expect(screen.getByLabelText("Translate")).toHaveValue("перевести это");
+  });
+
+  it("restores the form from the previous session on remount", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<VoiceMatcherPage />, {
+      wrapper: createTestWrapper(),
+    });
+
+    await screen.findByRole("option", { name: "Kore (female)" });
+    await user.selectOptions(screen.getByLabelText("Reference voice"), "Kore");
+    await user.selectOptions(screen.getByLabelText("Standard locale"), "en-US");
+    await user.type(screen.getByLabelText("Phrase"), "remember me");
+
+    unmount();
+
+    render(<VoiceMatcherPage />, { wrapper: createTestWrapper() });
+
+    // Text restores synchronously from localStorage; the selects restore once
+    // their options have been fetched again.
+    expect(screen.getByLabelText("Phrase")).toHaveValue("remember me");
+    await screen.findByRole("option", { name: "Kore (female)" });
+    expect(screen.getByLabelText("Reference voice")).toHaveValue("Kore");
+    expect(screen.getByLabelText("Standard locale")).toHaveValue("en-US");
   });
 
   it("derives candidates from locale + reference gender", async () => {
     const user = userEvent.setup();
     render(<VoiceMatcherPage />, { wrapper: createTestWrapper() });
 
-    await screen.findByRole("option", { name: "Kore" });
+    await screen.findByRole("option", { name: "Kore (female)" });
     // Kore is female -> exclude male candidates; pick en-US locale.
     await user.selectOptions(screen.getByLabelText("Reference voice"), "Kore");
     await user.selectOptions(screen.getByLabelText("Standard locale"), "en-US");
@@ -116,7 +207,7 @@ describe("VoiceMatcherPage", () => {
     const user = userEvent.setup();
     render(<VoiceMatcherPage />, { wrapper: createTestWrapper() });
 
-    await screen.findByRole("option", { name: "Kore" });
+    await screen.findByRole("option", { name: "Kore (female)" });
     await user.selectOptions(screen.getByLabelText("Reference voice"), "Kore");
     await user.selectOptions(screen.getByLabelText("Standard locale"), "en-US");
     await user.type(screen.getByLabelText("Phrase"), "hello");
@@ -157,7 +248,7 @@ describe("VoiceMatcherPage", () => {
       { wrapper: createTestWrapper() },
     );
 
-    await screen.findByRole("option", { name: "Kore" });
+    await screen.findByRole("option", { name: "Kore (female)" });
     await user.selectOptions(screen.getByLabelText("Reference voice"), "Kore");
     await user.selectOptions(screen.getByLabelText("Standard locale"), "en-US");
     await user.type(screen.getByLabelText("Phrase"), "hello");
@@ -213,7 +304,7 @@ describe("VoiceMatcherPage", () => {
     const user = userEvent.setup();
     render(<VoiceMatcherPage />, { wrapper: createTestWrapper() });
 
-    await screen.findByRole("option", { name: "Kore" });
+    await screen.findByRole("option", { name: "Kore (female)" });
     await user.selectOptions(screen.getByLabelText("Reference voice"), "Kore");
     await user.selectOptions(screen.getByLabelText("Standard locale"), "en-US");
     await user.type(screen.getByLabelText("Phrase"), "hello");

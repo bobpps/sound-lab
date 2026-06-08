@@ -1,47 +1,23 @@
 import type { Voice } from "../../../types/api.ts";
-import { useGeminiVoices } from "../api/queries.ts";
-
-const REFERENCE_MODELS = [
-  "gemini-2.5-flash-preview-tts",
-  "gemini-2.5-pro-preview-tts",
-  "gemini-3.1-flash-tts-preview",
-] as const;
+import { DEFAULT_REFERENCE_MODEL, useGeminiVoices } from "../api/queries.ts";
 
 interface ReferencePickerProps {
-  model: string;
   voiceId: string | null;
-  onModelChange: (model: string) => void;
   onVoiceChange: (voiceId: string) => void;
 }
 
 export function ReferencePicker({
-  model,
   voiceId,
-  onModelChange,
   onVoiceChange,
 }: ReferencePickerProps) {
-  const { data, isLoading, isError } = useGeminiVoices(model);
+  // The voice list is identical across every reference model, so load it once
+  // from the default model. The chosen voice is synthesized by all models.
+  const { data, isLoading, isError } = useGeminiVoices(DEFAULT_REFERENCE_MODEL);
   const voices: Voice[] = data ?? [];
   const selected = voices.find((v) => v.id === voiceId);
 
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1 text-sm text-gray-700">
-        <span>Reference model</span>
-        <select
-          aria-label="Reference model"
-          className="rounded border border-gray-300 px-2 py-1"
-          value={model}
-          onChange={(e) => onModelChange(e.target.value)}
-        >
-          {REFERENCE_MODELS.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-      </label>
-
       <label className="flex flex-col gap-1 text-sm text-gray-700">
         <span>Reference voice</span>
         <select
@@ -57,6 +33,7 @@ export function ReferencePicker({
           {voices.map((v) => (
             <option key={v.id} value={v.id}>
               {v.name}
+              {v.gender ? ` (${v.gender})` : ""}
             </option>
           ))}
         </select>

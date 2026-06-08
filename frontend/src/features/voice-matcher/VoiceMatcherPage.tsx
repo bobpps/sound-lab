@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { useGeminiVoices } from "./api/queries.ts";
+import {
+  DEFAULT_REFERENCE_MODEL,
+  REFERENCE_MODELS,
+  useGeminiVoices,
+} from "./api/queries.ts";
 import { LocaleSelector } from "./components/LocaleSelector.tsx";
 import { ReferencePicker } from "./components/ReferencePicker.tsx";
 import { ResultsList } from "./components/ResultsList.tsx";
 import { TextInput } from "./components/TextInput.tsx";
+import { TranslatePanel } from "./components/TranslatePanel.tsx";
 import {
   useStandardCandidates,
   type ReferenceGender,
@@ -16,18 +21,49 @@ import {
   synthesizeCandidate,
   synthesizeReference,
 } from "./lib/synthesize.ts";
+import {
+  readStoredForm,
+  writeStoredForm,
+  type VoiceMatcherFormState,
+} from "./lib/storage.ts";
 
-const DEFAULT_MODEL = "gemini-2.5-flash-preview-tts";
 const CONCURRENCY = 3;
 
+const DEFAULT_FORM: VoiceMatcherFormState = {
+  voiceId: null,
+  locale: null,
+  text: "",
+  translateProviderId: null,
+  translateText: "",
+};
+
 export function VoiceMatcherPage() {
-  const [model, setModel] = useState(DEFAULT_MODEL);
-  const [voiceId, setVoiceId] = useState<string | null>(null);
-  const [locale, setLocale] = useState<string | null>(null);
-  const [text, setText] = useState("");
+  // Read the persisted form once on mount so the page restores the last
+  // entered values when the user navigates back to it.
+  const [initial] = useState(() => readStoredForm(DEFAULT_FORM));
+  const [voiceId, setVoiceId] = useState<string | null>(initial.voiceId);
+  const [locale, setLocale] = useState<string | null>(initial.locale);
+  const [text, setText] = useState(initial.text);
+  const [translateProviderId, setTranslateProviderId] = useState<string | null>(
+    initial.translateProviderId,
+  );
+  const [translateText, setTranslateText] = useState(initial.translateText);
   const [submitted, setSubmitted] = useState(false);
 
-  const { data: geminiVoices } = useGeminiVoices(model);
+  // Persist the form on every change so the values survive unmount/navigation.
+  useEffect(() => {
+    writeStoredForm({
+      voiceId,
+      locale,
+      text,
+      translateProviderId,
+      translateText,
+    });
+  }, [voiceId, locale, text, translateProviderId, translateText]);
+
+  // Every reference model exposes the same voices, so load them once from the
+  // default model. The chosen voice is synthesized by all models on submit.
+  const { data: geminiVoices } = useGeminiVoices(DEFAULT_REFERENCE_MODEL);
   const selectedVoice = (geminiVoices ?? []).find((v) => v.id === voiceId);
   const referenceGender: ReferenceGender | null =
     selectedVoice?.gender === "male" || selectedVoice?.gender === "female"
@@ -68,7 +104,7 @@ export function VoiceMatcherPage() {
 
   function playAll() {
     if (!voiceId) return;
-    const order = [voiceId, ...candidates.map((c) => c.id)];
+    const order = [...REFERENCE_MODELS, ...candidates.map((c) => c.id)];
     const urls = order
       .map((label) => results[label]?.url)
       .filter((u): u is string => u !== undefined);
@@ -93,11 +129,15 @@ export function VoiceMatcherPage() {
 
   function handleSubmit() {
     if (!voiceId || !locale || text.trim() === "") return;
+    // Fan the chosen reference voice out across every model — one track each —
+    // then append the Standard candidates. Each reference job is keyed by its
+    // model so the results map keeps them distinct.
+    const referenceJobs = REFERENCE_MODELS.map<SynthesisJob>((m) => ({
+      key: m,
+      run: (signal) => synthesizeReference(voiceId, text, m, signal),
+    }));
     const jobs: SynthesisJob[] = [
-      {
-        key: voiceId,
-        run: (signal) => synthesizeReference(voiceId, text, model, signal),
-      },
+      ...referenceJobs,
       ...candidates.map<SynthesisJob>((c) => ({
         key: c.id,
         run: (signal) => synthesizeCandidate(c.id, text, signal),
@@ -128,13 +168,7 @@ export function VoiceMatcherPage() {
 
       <div className="grid max-w-xl gap-4">
         <ReferencePicker
-          model={model}
           voiceId={voiceId}
-          onModelChange={(m) => {
-            setModel(m);
-            setVoiceId(null);
-            resetOutput();
-          }}
           onVoiceChange={(v) => {
             setVoiceId(v);
             resetOutput();
@@ -149,6 +183,17 @@ export function VoiceMatcherPage() {
           }}
           isLoading={localesLoading}
           isError={localesError}
+        />
+        <TranslatePanel
+          targetLocale={locale}
+          providerId={translateProviderId}
+          onProviderChange={setTranslateProviderId}
+          source={translateText}
+          onSourceChange={setTranslateText}
+          onTranslated={(t) => {
+            setText(t);
+            resetOutput();
+          }}
         />
         <TextInput
           value={text}
@@ -170,7 +215,7 @@ export function VoiceMatcherPage() {
 
       {submitted && voiceId ? (
         <ResultsList
-          referenceLabel={voiceId}
+          referenceLabels={[...REFERENCE_MODELS]}
           candidateLabels={candidates.map((c) => c.id)}
           results={results}
           onPlay={play}

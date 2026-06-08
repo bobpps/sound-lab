@@ -2,7 +2,7 @@ import type { ResultMap } from "../hooks/useBatchSynthesis.ts";
 import { VoiceResultCard } from "./VoiceResultCard.tsx";
 
 interface ResultsListProps {
-  referenceLabel: string;
+  referenceLabels: string[];
   candidateLabels: string[];
   results: ResultMap;
   onPlay: (url: string) => void;
@@ -11,7 +11,7 @@ interface ResultsListProps {
 }
 
 export function ResultsList({
-  referenceLabel,
+  referenceLabels,
   candidateLabels,
   results,
   onPlay,
@@ -39,12 +39,15 @@ export function ResultsList({
         <p className="text-xs font-semibold uppercase text-gray-500">
           Reference
         </p>
-        <VoiceResultCard
-          label={referenceLabel}
-          result={results[referenceLabel]}
-          onPlay={onPlay}
-          highlighted
-        />
+        {referenceLabels.map((label) => (
+          <VoiceResultCard
+            key={label}
+            label={label}
+            result={results[label]}
+            onPlay={onPlay}
+            highlighted
+          />
+        ))}
       </div>
 
       <div className="flex flex-col gap-2">
